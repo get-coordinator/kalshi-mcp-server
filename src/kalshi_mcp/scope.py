@@ -27,6 +27,11 @@ OUT_OF_SCOPE = (
     "and politics markets."
 )
 
+UNKNOWN_SERIES = (
+    "{ticker} isn't a Kalshi series COORDINATOR covers. Find the market with "
+    "search_markets (e.g. the teams or the topic) and use the tickers it returns."
+)
+
 SERIES_TTL_SECONDS = 3600
 
 _series_lock = threading.Lock()
@@ -68,7 +73,7 @@ class CategoryScope:
             raise ValueError(OUT_OF_SCOPE)
         series_ticker = args.get("series_ticker")
         if series_ticker is not None and not self._allowed(series_ticker):
-            raise ValueError(OUT_OF_SCOPE)
+            raise ValueError(UNKNOWN_SERIES.format(ticker=series_ticker))
 
         if tool_name == "get_markets" and "mve_filter" not in args:
             # Combo markets span categories; without this a page is mostly them.

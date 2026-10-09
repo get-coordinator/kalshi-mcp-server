@@ -55,11 +55,12 @@ class CategoryScopeTest(unittest.TestCase):
         for name, args in (
             ("get_tags_for_series_category", {"category": "Entertainment"}),
             ("get_series_list", {"category": "Climate and Weather"}),
-            ("get_open_market_titles_for_series", {"series_ticker": "KXOSCARS"}),
             ("get_order", {"order_id": "o1"}),
         ):
             with self.assertRaisesRegex(ValueError, OUT_OF_SCOPE):
                 self.scope.call_tool(name, args)
+        with self.assertRaisesRegex(ValueError, "search_markets"):
+            self.scope.call_tool("get_open_market_titles_for_series", {"series_ticker": "KXOSCARS"})
 
     def test_drops_markets_and_positions_outside(self) -> None:
         markets = self.scope.call_tool("get_markets", {})

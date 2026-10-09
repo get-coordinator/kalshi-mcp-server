@@ -235,6 +235,16 @@ class KalshiClientTests(unittest.TestCase):
         self.assertIn("event_ticker=TRUMPWIN-26NOV", full_url)
         self.assertIn("min_close_ts=1700000000", full_url)
 
+    def test_null_series_is_an_empty_page(self) -> None:
+        client = KalshiClient(
+            Settings(base_url="https://api.elections.kalshi.com/trade-api/v2", timeout_seconds=5)
+        )
+        with patch(
+            "kalshi_mcp.kalshi_client.request.urlopen",
+            return_value=_FakeResponse(json.dumps({"series": None})),
+        ):
+            self.assertEqual(client.get_series_list(category="Sports", tags="Football").series, [])
+
     def test_get_markets_without_subtitle(self) -> None:
         payload = {
             "markets": [

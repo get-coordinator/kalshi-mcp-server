@@ -673,7 +673,8 @@ class KalshiClient:
             path = f"{path}?{parse.urlencode(params)}"
 
         payload = self._get_json(path)
-        series_items = payload.get("series")
+        # Kalshi answers a filter with nothing in it with "series": null.
+        series_items = [] if "series" in payload and payload["series"] is None else payload.get("series")
         if not isinstance(series_items, list):
             LOGGER.error(
                 "Unexpected series-list payload: expected list at 'series', got=%s keys=%s",
@@ -758,7 +759,7 @@ class KalshiClient:
             path = f"{path}?{parse.urlencode(params)}"
 
         payload = self._get_json(path)
-        market_items = payload.get("markets")
+        market_items = [] if "markets" in payload and payload["markets"] is None else payload.get("markets")
         if not isinstance(market_items, list):
             LOGGER.error(
                 "Unexpected markets payload: expected list at 'markets', got=%s keys=%s",
