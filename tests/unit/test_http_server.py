@@ -58,6 +58,15 @@ class HTTPServerTest(unittest.TestCase):
         names = {t["name"] for t in body["result"]["tools"]}
         self.assertIn("get_markets", names)
         self.assertFalse(names & {"create_order", "cancel_order", "create_subaccount"})
+        self.assertFalse(names & {"get_balance", "get_positions", "get_orders"})
+
+    def test_account_tools_need_a_key(self) -> None:
+        status, body = self._post(
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_balance", "arguments": {}}},
+            {"X-Internal-Secret": SECRET},
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(body["result"]["isError"])
 
     def test_notification_is_accepted(self) -> None:
         status, body = self._post({"jsonrpc": "2.0", "method": "notifications/initialized"}, {"X-Internal-Secret": SECRET})
@@ -66,8 +75,9 @@ class HTTPServerTest(unittest.TestCase):
     def test_read_only_key_is_accepted(self) -> None:
         pem = _key(serialization.PrivateFormat.TraditionalOpenSSL)
         with patch.object(KalshiClient, "get_api_key_scopes", return_value=["read"]):
-            status, _ = self._list({"X-Internal-Secret": SECRET, "X-Kalshi-Key": f"kid:{_body(pem)}"})
+            status, body = self._list({"X-Internal-Secret": SECRET, "X-Kalshi-Key": f"kid:{_body(pem)}"})
         self.assertEqual(status, 200)
+        self.assertIn("get_positions", {t["name"] for t in body["result"]["tools"]})
 
     def test_trading_key_is_refused(self) -> None:
         pem = _key(serialization.PrivateFormat.PKCS8)

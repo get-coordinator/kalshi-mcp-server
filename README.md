@@ -7,7 +7,7 @@ Fork of [xilei-wang-90/kalshi-mcp-server](https://github.com/xilei-wang-90/kalsh
 
 `kalshi-mcp-http` serves stateless Streamable HTTP at `POST /mcp` (and `GET /healthz`) for many users at once:
 
-- `X-Kalshi-Key: <key id>:<private key>` carries the caller's own key, as PEM or as the base64 body of the PEM. Without it, only the public market tools work.
+- `X-Kalshi-Key: <key id>:<private key>` carries the caller's own key, as PEM or as the base64 body of the PEM. Without it, only the public market tools are listed; the account tools (`get_balance`, `get_positions`, `get_orders`, `get_order`, `get_subaccount_balances`) need the key.
 - Only read-only keys are accepted: a key with any `write` scope gets 403, a key Kalshi rejects gets 401. Create the key on Kalshi with Read access only.
 - `INTERNAL_API_SECRET` (required) must be sent as `X-Internal-Secret`; `KALSHI_MCP_ALLOW_NO_SECRET=true` lifts that for local use. `PORT` defaults to 8000.
 

@@ -31,6 +31,11 @@ SECRET_HEADER = "X-Internal-Secret"
 MAX_BODY = 1 << 20
 SCOPE_TTL_SECONDS = 600
 
+# Tools that read the caller's own account: only listed when a key comes with the request.
+ACCOUNT_TOOLS = frozenset(
+    {"get_balance", "get_subaccount_balances", "get_orders", "get_order", "get_positions"}
+)
+
 WRITE_KEY_MESSAGE = (
     "This Kalshi API key can place trades. Only read-only keys are accepted: "
     "create a key with Read access only and connect that one."
@@ -56,6 +61,21 @@ def parse_key_header(value: str) -> tuple[str, str]:
     except Exception as exc:
         raise CredentialError(401, "The Kalshi private key is not valid.") from exc
     return key_id, body
+
+
+class PublicRegistry:
+    """A registry without the account tools, for requests that carry no key."""
+
+    def __init__(self, registry: Any) -> None:
+        self._registry = registry
+
+    def list_tools(self) -> list[dict[str, Any]]:
+        return [t for t in self._registry.list_tools() if t["name"] not in ACCOUNT_TOOLS]
+
+    def call_tool(self, tool_name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
+        if tool_name in ACCOUNT_TOOLS:
+            raise ValueError("Reading a Kalshi account needs its read-only API key.")
+        return self._registry.call_tool(tool_name, arguments)
 
 
 class ScopeCache:
@@ -134,7 +154,9 @@ def build_handler(base: Settings, secret: str, scopes: ScopeCache) -> type[BaseH
                     self._send(exc.status, {"error": str(exc)})
                     return
 
-            registry = create_tool_registry(settings)
+            registry: Any = create_tool_registry(settings)
+            if not header:
+                registry = PublicRegistry(registry)
             server = StdioMCPServer(registry, resources=ResourceRegistry(registry))
             server._initialized = True
             if isinstance(message, list):
