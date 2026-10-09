@@ -11,9 +11,6 @@ from .kalshi_client import KalshiClient
 from .mcp.handlers import ToolHandler, build_tool_handlers
 from .mcp.resources import ResourceRegistry
 from .mcp.schema import (
-    CANCEL_ORDER_TOOL,
-    CREATE_ORDER_TOOL,
-    CREATE_SUBACCOUNT_TOOL,
     GET_BALANCE_TOOL,
     GET_CATEGORIES_TOOL,
     GET_MARKETS_TOOL,
@@ -51,11 +48,8 @@ class ToolRegistry:
             GET_OPEN_MARKETS_FOR_SERIES_TOOL,
             GET_OPEN_MARKET_TITLES_FOR_SERIES_TOOL,
             GET_SERIES_TICKERS_FOR_CATEGORY_TOOL,
-            CREATE_SUBACCOUNT_TOOL,
             GET_ORDER_TOOL,
             GET_ORDERS_TOOL,
-            CREATE_ORDER_TOOL,
-            CANCEL_ORDER_TOOL,
             GET_POSITIONS_TOOL,
         ]
 

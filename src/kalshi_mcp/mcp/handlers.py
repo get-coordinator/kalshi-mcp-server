@@ -5,9 +5,6 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from ..models import (
-    CancelledOrder,
-    CreateOrderParams,
-    CreatedSubaccount,
     EventPosition,
     Market,
     MarketPosition,
@@ -149,20 +146,11 @@ def build_tool_handlers(
         "get_series_tickers_for_category": lambda arguments: (
             handle_get_series_tickers_for_category(metadata_service, arguments)
         ),
-        "create_subaccount": lambda arguments: (
-            handle_create_subaccount(portfolio_service, arguments)
-        ),
         "get_orders": lambda arguments: (
             handle_get_orders(portfolio_service, arguments)
         ),
         "get_order": lambda arguments: (
             handle_get_order(portfolio_service, arguments)
-        ),
-        "create_order": lambda arguments: (
-            handle_create_order(portfolio_service, arguments)
-        ),
-        "cancel_order": lambda arguments: (
-            handle_cancel_order(portfolio_service, arguments)
         ),
         "get_positions": lambda arguments: (
             handle_get_positions(portfolio_service, arguments)
@@ -226,20 +214,6 @@ def _serialize_subaccount_balance(item: SubaccountBalance) -> dict[str, Any]:
         "balance": item.balance,
         "updated_ts": item.updated_ts,
     }
-
-
-def handle_create_subaccount(
-    portfolio_service: PortfolioService, arguments: dict[str, Any] | None
-) -> dict[str, Any]:
-    if arguments:
-        raise ValueError("create_subaccount does not accept arguments.")
-
-    result = portfolio_service.create_subaccount()
-    return _serialize_created_subaccount(result)
-
-
-def _serialize_created_subaccount(result: CreatedSubaccount) -> dict[str, Any]:
-    return {"subaccount_number": result.subaccount_number}
 
 
 def handle_get_categories(
@@ -878,28 +852,6 @@ def handle_get_order(
     return _serialize_order(order)
 
 
-def handle_cancel_order(
-    portfolio_service: PortfolioService, arguments: dict[str, Any] | None
-) -> dict[str, Any]:
-    args = _require_arguments(arguments, "cancel_order")
-    order_id = _parse_required_str(
-        args,
-        "order_id",
-        type_error="order_id must be a string.",
-        empty_error="order_id must be a non-empty string.",
-    )
-    subaccount = _parse_optional_int(
-        args,
-        "subaccount",
-        type_error="subaccount must be an integer.",
-        range_error="subaccount must be between 0 and 32.",
-        min_value=0,
-        max_value=32,
-    )
-    result = portfolio_service.cancel_order(order_id, subaccount=subaccount)
-    return _serialize_cancelled_order(result)
-
-
 def handle_get_orders(
     portfolio_service: PortfolioService, arguments: dict[str, Any] | None
 ) -> dict[str, Any]:
@@ -990,218 +942,11 @@ def handle_get_orders(
     return _serialize_orders_list(orders_list)
 
 
-def handle_create_order(
-    portfolio_service: PortfolioService, arguments: dict[str, Any] | None
-) -> dict[str, Any]:
-    args = _require_arguments(arguments, "create_order")
-
-    ticker = _parse_required_str(
-        args,
-        "ticker",
-        type_error="ticker must be a string.",
-        empty_error="ticker must be a non-empty string.",
-    )
-
-    side = _parse_required_str(
-        args,
-        "side",
-        type_error="side must be a string.",
-        empty_error="side must be a non-empty string.",
-    )
-    allowed_side = {"yes", "no"}
-    if side not in allowed_side:
-        raise ValueError("side must be one of yes, no.")
-
-    action = _parse_required_str(
-        args,
-        "action",
-        type_error="action must be a string.",
-        empty_error="action must be a non-empty string.",
-    )
-    allowed_action = {"buy", "sell"}
-    if action not in allowed_action:
-        raise ValueError("action must be one of buy, sell.")
-
-    client_order_id = _parse_optional_str(
-        args,
-        "client_order_id",
-        type_error="client_order_id must be a string.",
-        empty_error="client_order_id must be a non-empty string.",
-    )
-
-    count = _parse_optional_int(
-        args,
-        "count",
-        type_error="count must be an integer.",
-        range_error="count must be between 1 and 1000000.",
-        min_value=1,
-        max_value=1_000_000,
-    )
-
-    count_fp = _parse_optional_str(
-        args,
-        "count_fp",
-        type_error="count_fp must be a string.",
-        empty_error="count_fp must be a non-empty string.",
-    )
-
-    yes_price = _parse_optional_int(
-        args,
-        "yes_price",
-        type_error="yes_price must be an integer.",
-        range_error="yes_price must be between 1 and 99.",
-        min_value=1,
-        max_value=99,
-    )
-
-    no_price = _parse_optional_int(
-        args,
-        "no_price",
-        type_error="no_price must be an integer.",
-        range_error="no_price must be between 1 and 99.",
-        min_value=1,
-        max_value=99,
-    )
-
-    yes_price_dollars = _parse_optional_str(
-        args,
-        "yes_price_dollars",
-        type_error="yes_price_dollars must be a string.",
-        empty_error="yes_price_dollars must be a non-empty string.",
-    )
-
-    no_price_dollars = _parse_optional_str(
-        args,
-        "no_price_dollars",
-        type_error="no_price_dollars must be a string.",
-        empty_error="no_price_dollars must be a non-empty string.",
-    )
-
-    ts_max = 10_000_000_000
-    expiration_ts = _parse_optional_int(
-        args,
-        "expiration_ts",
-        type_error="expiration_ts must be an integer.",
-        range_error="expiration_ts must be a non-negative integer.",
-        min_value=0,
-        max_value=ts_max,
-    )
-
-    time_in_force = _parse_optional_str(
-        args,
-        "time_in_force",
-        type_error="time_in_force must be a string.",
-        empty_error="time_in_force must be a non-empty string.",
-    )
-    if time_in_force is not None:
-        allowed_tif = {"fill_or_kill", "good_till_canceled", "immediate_or_cancel"}
-        if time_in_force not in allowed_tif:
-            raise ValueError(
-                "time_in_force must be one of fill_or_kill, good_till_canceled, immediate_or_cancel."
-            )
-
-    buy_max_cost = _parse_optional_int(
-        args,
-        "buy_max_cost",
-        type_error="buy_max_cost must be an integer.",
-        range_error="buy_max_cost must be a non-negative integer.",
-        min_value=0,
-        max_value=ts_max,
-    )
-
-    sell_position_floor = _parse_optional_int(
-        args,
-        "sell_position_floor",
-        type_error="sell_position_floor must be an integer.",
-        range_error="sell_position_floor is deprecated and must be 0 if provided.",
-        min_value=0,
-        max_value=0,
-    )
-
-    post_only = _parse_bool(
-        args, "post_only", False, type_error="post_only must be a boolean."
-    )
-
-    reduce_only = _parse_bool(
-        args, "reduce_only", False, type_error="reduce_only must be a boolean."
-    )
-
-    self_trade_prevention_type = _parse_optional_str(
-        args,
-        "self_trade_prevention_type",
-        type_error="self_trade_prevention_type must be a string.",
-        empty_error="self_trade_prevention_type must be a non-empty string.",
-    )
-    if self_trade_prevention_type is not None:
-        allowed_stp = {"taker_at_cross", "maker"}
-        if self_trade_prevention_type not in allowed_stp:
-            raise ValueError(
-                "self_trade_prevention_type must be one of taker_at_cross, maker."
-            )
-
-    order_group_id = _parse_optional_str(
-        args,
-        "order_group_id",
-        type_error="order_group_id must be a string.",
-        empty_error="order_group_id must be a non-empty string.",
-    )
-
-    cancel_order_on_pause = _parse_bool(
-        args,
-        "cancel_order_on_pause",
-        False,
-        type_error="cancel_order_on_pause must be a boolean.",
-    )
-
-    subaccount = _parse_optional_int(
-        args,
-        "subaccount",
-        type_error="subaccount must be an integer.",
-        range_error="subaccount must be between 0 and 32.",
-        min_value=0,
-        max_value=32,
-    )
-
-    params = CreateOrderParams(
-        ticker=ticker,
-        side=side,
-        action=action,
-        client_order_id=client_order_id,
-        count=count,
-        count_fp=count_fp,
-        yes_price=yes_price,
-        no_price=no_price,
-        yes_price_dollars=yes_price_dollars,
-        no_price_dollars=no_price_dollars,
-        expiration_ts=expiration_ts,
-        time_in_force=time_in_force,
-        buy_max_cost=buy_max_cost,
-        sell_position_floor=sell_position_floor,
-        post_only=post_only or None,
-        reduce_only=reduce_only or None,
-        self_trade_prevention_type=self_trade_prevention_type,
-        order_group_id=order_group_id,
-        cancel_order_on_pause=cancel_order_on_pause or None,
-        subaccount=subaccount,
-    )
-
-    order = portfolio_service.create_order(params)
-    return _serialize_order(order)
-
-
 def _serialize_orders_list(orders_list: PortfolioOrdersList) -> dict[str, Any]:
     serialized: dict[str, Any] = {"orders": [_serialize_order(item) for item in orders_list.orders]}
     if orders_list.cursor is not None:
         serialized["cursor"] = orders_list.cursor
     return serialized
-
-
-def _serialize_cancelled_order(result: CancelledOrder) -> dict[str, Any]:
-    return {
-        "order": _serialize_order(result.order),
-        "reduced_by": result.reduced_by,
-        "reduced_by_fp": result.reduced_by_fp,
-    }
 
 
 def _serialize_order(order: PortfolioOrder) -> dict[str, Any]:

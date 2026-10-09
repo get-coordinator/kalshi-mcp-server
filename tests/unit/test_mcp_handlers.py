@@ -1,9 +1,6 @@
 import unittest
 
 from kalshi_mcp.mcp.handlers import (
-    handle_cancel_order,
-    handle_create_order,
-    handle_create_subaccount,
     handle_get_balance,
     handle_get_order,
     handle_get_orders,
@@ -19,9 +16,6 @@ from kalshi_mcp.mcp.handlers import (
     handle_get_open_market_titles_for_series,
 )
 from kalshi_mcp.models import (
-    CancelledOrder,
-    CreateOrderParams,
-    CreatedSubaccount,
     EventPosition,
     Market,
     MarketPosition,
@@ -215,9 +209,6 @@ class _FakePortfolioService:
             ]
         )
 
-    def create_subaccount(self) -> CreatedSubaccount:
-        return CreatedSubaccount(subaccount_number=3)
-
     def get_order(self, order_id: str) -> PortfolioOrder:
         return PortfolioOrder(
             order_id=order_id,
@@ -246,45 +237,6 @@ class _FakePortfolioService:
             taker_fill_cost_dollars="0.00",
             maker_fill_cost_dollars="0.00",
             subaccount_number=0,
-        )
-
-    def create_order(self, params: CreateOrderParams) -> PortfolioOrder:
-        return PortfolioOrder(
-            order_id="order-new",
-            user_id="user-1",
-            client_order_id="client-new",
-            ticker=params.ticker,
-            status="resting",
-            side=params.side,
-            action=params.action,
-            type="limit",
-            yes_price=55,
-            no_price=45,
-            fill_count=0,
-            remaining_count=10,
-            initial_count=10,
-            taker_fees=0,
-            maker_fees=0,
-            taker_fill_cost=0,
-            maker_fill_cost=0,
-            queue_position=1,
-            yes_price_dollars="0.55",
-            no_price_dollars="0.45",
-            fill_count_fp="0.0000",
-            remaining_count_fp="10.0000",
-            initial_count_fp="10.0000",
-            taker_fill_cost_dollars="0.00",
-            maker_fill_cost_dollars="0.00",
-        )
-
-    def cancel_order(self, order_id: str, *, subaccount: int | None = None) -> CancelledOrder:
-        order = self.get_order(order_id)
-        order.status = "canceled"
-        order.subaccount_number = subaccount
-        return CancelledOrder(
-            order=order,
-            reduced_by=4,
-            reduced_by_fp="4.0000",
         )
 
     def get_positions(
@@ -420,17 +372,6 @@ class _CaptureOrdersPortfolioService(_FakePortfolioService):
             subaccount=subaccount,
         )
 
-
-class _CaptureCancelOrderPortfolioService(_FakePortfolioService):
-    def __init__(self) -> None:
-        self.last_cancel_order_args: dict[str, int | str | None] | None = None
-
-    def cancel_order(self, order_id: str, *, subaccount: int | None = None) -> CancelledOrder:
-        self.last_cancel_order_args = {
-            "order_id": order_id,
-            "subaccount": subaccount,
-        }
-        return super().cancel_order(order_id, subaccount=subaccount)
 
 class _PagingMarketsMetadataService(_FakeMetadataService):
     def get_markets(
@@ -664,14 +605,6 @@ class HandlersTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             handle_get_open_market_titles_for_series(_FakeMetadataService(), None)
 
-    def test_create_subaccount_handler(self) -> None:
-        result = handle_create_subaccount(_FakePortfolioService(), None)
-        self.assertEqual({"subaccount_number": 3}, result)
-
-    def test_create_subaccount_rejects_arguments(self) -> None:
-        with self.assertRaises(ValueError):
-            handle_create_subaccount(_FakePortfolioService(), {"unexpected": True})
-
     def test_get_orders_handler(self) -> None:
         result = handle_get_orders(
             _FakePortfolioService(),
@@ -720,96 +653,6 @@ class HandlersTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             handle_get_orders(_FakePortfolioService(), {"subaccount": 33})
 
-    def test_create_order_required_only(self) -> None:
-        result = handle_create_order(
-            _FakePortfolioService(),
-            {"ticker": "KXBTCUSD-26JAN01-T1", "side": "yes", "action": "buy"},
-        )
-        self.assertEqual("order-new", result["order_id"])
-        self.assertEqual("KXBTCUSD-26JAN01-T1", result["ticker"])
-        self.assertEqual("yes", result["side"])
-        self.assertEqual("buy", result["action"])
-        self.assertEqual("resting", result["status"])
-
-    def test_create_order_all_arguments(self) -> None:
-        result = handle_create_order(
-            _FakePortfolioService(),
-            {
-                "ticker": "KXBTCUSD-26JAN01-T1",
-                "side": "no",
-                "action": "sell",
-                "client_order_id": "my-order-1",
-                "count": 5,
-                "count_fp": "5.0000",
-                "yes_price": 55,
-                "no_price": 45,
-                "yes_price_dollars": "0.55",
-                "no_price_dollars": "0.45",
-                "expiration_ts": 1700000000,
-                "time_in_force": "good_till_canceled",
-                "buy_max_cost": 1000,
-                "sell_position_floor": 0,
-                "post_only": True,
-                "reduce_only": True,
-                "self_trade_prevention_type": "maker",
-                "order_group_id": "group-1",
-                "cancel_order_on_pause": True,
-                "subaccount": 1,
-            },
-        )
-        self.assertEqual("order-new", result["order_id"])
-        self.assertEqual("no", result["side"])
-        self.assertEqual("sell", result["action"])
-
-    def test_create_order_missing_required_arguments(self) -> None:
-        with self.assertRaises(ValueError):
-            handle_create_order(_FakePortfolioService(), None)
-
-    def test_create_order_missing_ticker(self) -> None:
-        with self.assertRaises(ValueError):
-            handle_create_order(
-                _FakePortfolioService(),
-                {"side": "yes", "action": "buy"},
-            )
-
-    def test_create_order_invalid_side(self) -> None:
-        with self.assertRaises(ValueError):
-            handle_create_order(
-                _FakePortfolioService(),
-                {"ticker": "KXBTCUSD-26JAN01-T1", "side": "maybe", "action": "buy"},
-            )
-
-    def test_create_order_invalid_action(self) -> None:
-        with self.assertRaises(ValueError):
-            handle_create_order(
-                _FakePortfolioService(),
-                {"ticker": "KXBTCUSD-26JAN01-T1", "side": "yes", "action": "hold"},
-            )
-
-    def test_create_order_invalid_time_in_force(self) -> None:
-        with self.assertRaises(ValueError):
-            handle_create_order(
-                _FakePortfolioService(),
-                {
-                    "ticker": "KXBTCUSD-26JAN01-T1",
-                    "side": "yes",
-                    "action": "buy",
-                    "time_in_force": "day",
-                },
-            )
-
-    def test_create_order_invalid_sell_position_floor(self) -> None:
-        with self.assertRaises(ValueError):
-            handle_create_order(
-                _FakePortfolioService(),
-                {
-                    "ticker": "KXBTCUSD-26JAN01-T1",
-                    "side": "yes",
-                    "action": "buy",
-                    "sell_position_floor": 1,
-                },
-            )
-
     def test_get_order_handler(self) -> None:
         result = handle_get_order(
             _FakePortfolioService(),
@@ -834,42 +677,6 @@ class HandlersTests(unittest.TestCase):
     def test_get_order_rejects_non_string_order_id(self) -> None:
         with self.assertRaises(ValueError):
             handle_get_order(_FakePortfolioService(), {"order_id": 123})
-
-    def test_cancel_order_handler(self) -> None:
-        result = handle_cancel_order(
-            _FakePortfolioService(),
-            {"order_id": "order-abc-123", "subaccount": 1},
-        )
-        self.assertEqual("order-abc-123", result["order"]["order_id"])
-        self.assertEqual("canceled", result["order"]["status"])
-        self.assertEqual(1, result["order"]["subaccount_number"])
-        self.assertEqual(4, result["reduced_by"])
-        self.assertEqual("4.0000", result["reduced_by_fp"])
-
-    def test_cancel_order_defaults_optional_subaccount(self) -> None:
-        service = _CaptureCancelOrderPortfolioService()
-        result = handle_cancel_order(service, {"order_id": "order-abc-123"})
-        self.assertEqual("order-abc-123", result["order"]["order_id"])
-        self.assertEqual(
-            {"order_id": "order-abc-123", "subaccount": None},
-            service.last_cancel_order_args,
-        )
-
-    def test_cancel_order_requires_arguments(self) -> None:
-        with self.assertRaises(ValueError):
-            handle_cancel_order(_FakePortfolioService(), None)
-
-    def test_cancel_order_rejects_empty_order_id(self) -> None:
-        with self.assertRaises(ValueError):
-            handle_cancel_order(_FakePortfolioService(), {"order_id": ""})
-
-    def test_cancel_order_rejects_non_string_order_id(self) -> None:
-        with self.assertRaises(ValueError):
-            handle_cancel_order(_FakePortfolioService(), {"order_id": 123})
-
-    def test_cancel_order_rejects_invalid_subaccount(self) -> None:
-        with self.assertRaises(ValueError):
-            handle_cancel_order(_FakePortfolioService(), {"order_id": "order-abc-123", "subaccount": 33})
 
     def test_handle_get_positions(self) -> None:
         result = handle_get_positions(_FakePortfolioService(), None)

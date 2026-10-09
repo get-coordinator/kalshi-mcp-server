@@ -276,20 +276,6 @@ GET_SUBACCOUNT_BALANCES_TOOL = {
     },
 }
 
-CREATE_SUBACCOUNT_TOOL = {
-    "name": "create_subaccount",
-    "description": (
-        "Create a new subaccount in your Kalshi portfolio. "
-        "Maximum 32 subaccounts per user. "
-        "Uses POST /portfolio/subaccounts (requires API key authentication)."
-    ),
-    "inputSchema": {
-        "type": "object",
-        "properties": {},
-        "additionalProperties": False,
-    },
-}
-
 GET_ORDERS_TOOL = {
     "name": "get_orders",
     "description": (
@@ -346,123 +332,6 @@ GET_ORDERS_TOOL = {
     },
 }
 
-CREATE_ORDER_TOOL = {
-    "name": "create_order",
-    "description": (
-        "Create a new order on a Kalshi market. "
-        "Uses POST /portfolio/orders (requires API key authentication)."
-    ),
-    "inputSchema": {
-        "type": "object",
-        "properties": {
-            "ticker": {
-                "type": "string",
-                "description": "Market ticker to place the order on.",
-                "minLength": 1,
-            },
-            "side": {
-                "type": "string",
-                "description": "Side of the order.",
-                "enum": ["yes", "no"],
-            },
-            "action": {
-                "type": "string",
-                "description": "Order action.",
-                "enum": ["buy", "sell"],
-            },
-            "client_order_id": {
-                "type": "string",
-                "description": "Optional client-specified order ID.",
-                "minLength": 1,
-            },
-            "count": {
-                "type": "integer",
-                "description": "Number of contracts.",
-                "minimum": 1,
-                "maximum": 1000000,
-            },
-            "count_fp": {
-                "type": "string",
-                "description": "Fixed-point contract count.",
-                "minLength": 1,
-            },
-            "yes_price": {
-                "type": "integer",
-                "description": "Yes price in cents (1-99).",
-                "minimum": 1,
-                "maximum": 99,
-            },
-            "no_price": {
-                "type": "integer",
-                "description": "No price in cents (1-99).",
-                "minimum": 1,
-                "maximum": 99,
-            },
-            "yes_price_dollars": {
-                "type": "string",
-                "description": "Yes price in dollars.",
-                "minLength": 1,
-            },
-            "no_price_dollars": {
-                "type": "string",
-                "description": "No price in dollars.",
-                "minLength": 1,
-            },
-            "expiration_ts": {
-                "type": "integer",
-                "description": "Unix timestamp for order expiration.",
-                "minimum": 0,
-            },
-            "time_in_force": {
-                "type": "string",
-                "description": "Time-in-force policy for the order.",
-                "enum": ["fill_or_kill", "good_till_canceled", "immediate_or_cancel"],
-            },
-            "buy_max_cost": {
-                "type": "integer",
-                "description": "Maximum cost for a buy order in cents.",
-                "minimum": 0,
-            },
-            "sell_position_floor": {
-                "type": "integer",
-                "description": "Deprecated. Must be 0 if provided.",
-                "minimum": 0,
-                "maximum": 0,
-            },
-            "post_only": {
-                "type": "boolean",
-                "description": "If true, order will only be placed as a maker order.",
-            },
-            "reduce_only": {
-                "type": "boolean",
-                "description": "If true, order will only reduce an existing position.",
-            },
-            "self_trade_prevention_type": {
-                "type": "string",
-                "description": "Self-trade prevention strategy.",
-                "enum": ["taker_at_cross", "maker"],
-            },
-            "order_group_id": {
-                "type": "string",
-                "description": "Optional order group ID.",
-                "minLength": 1,
-            },
-            "cancel_order_on_pause": {
-                "type": "boolean",
-                "description": "If true, cancel the order when the market is paused.",
-            },
-            "subaccount": {
-                "type": "integer",
-                "description": "Subaccount number (0 for primary, 1-32 for subaccounts).",
-                "minimum": 0,
-                "maximum": 32,
-            },
-        },
-        "required": ["ticker", "side", "action"],
-        "additionalProperties": False,
-    },
-}
-
 GET_ORDER_TOOL = {
     "name": "get_order",
     "description": (
@@ -476,32 +345,6 @@ GET_ORDER_TOOL = {
                 "type": "string",
                 "description": "The order identifier.",
                 "minLength": 1,
-            },
-        },
-        "required": ["order_id"],
-        "additionalProperties": False,
-    },
-}
-
-CANCEL_ORDER_TOOL = {
-    "name": "cancel_order",
-    "description": (
-        "Cancel a resting order on Kalshi. "
-        "Uses DELETE /portfolio/orders/{order_id} (requires API key authentication)."
-    ),
-    "inputSchema": {
-        "type": "object",
-        "properties": {
-            "order_id": {
-                "type": "string",
-                "description": "The order identifier to cancel.",
-                "minLength": 1,
-            },
-            "subaccount": {
-                "type": "integer",
-                "description": "Subaccount number (0 for primary, 1-32 for subaccounts).",
-                "minimum": 0,
-                "maximum": 32,
             },
         },
         "required": ["order_id"],

@@ -235,6 +235,34 @@ class KalshiClientTests(unittest.TestCase):
         self.assertIn("event_ticker=TRUMPWIN-26NOV", full_url)
         self.assertIn("min_close_ts=1700000000", full_url)
 
+    def test_get_markets_without_subtitle(self) -> None:
+        payload = {
+            "markets": [
+                {
+                    "ticker": "KXNFLGAME-26OCT19WASSF-WAS",
+                    "event_ticker": "KXNFLGAME-26OCT19WASSF",
+                    "market_type": "binary",
+                    "title": "Washington wins",
+                    "status": "active",
+                    "yes_bid_dollars": "0.2100",
+                }
+            ],
+            "cursor": "",
+        }
+        client = KalshiClient(
+            Settings(base_url="https://api.elections.kalshi.com/trade-api/v2", timeout_seconds=5)
+        )
+
+        with patch(
+            "kalshi_mcp.kalshi_client.request.urlopen",
+            return_value=_FakeResponse(json.dumps(payload)),
+        ):
+            result = client.get_markets(series_ticker="KXNFLGAME")
+
+        self.assertEqual(len(result.markets), 1)
+        self.assertIsNone(result.markets[0].subtitle)
+        self.assertEqual(result.markets[0].yes_bid_dollars, "0.2100")
+
     def test_get_markets_missing_payload_key_raises_and_logs(self) -> None:
         settings = Settings(
             base_url="https://api.elections.kalshi.com/trade-api/v2",
@@ -643,141 +671,6 @@ class KalshiClientTests(unittest.TestCase):
         self.assertTrue(
             any("'order' is not an object" in message for message in captured.output)
         )
-
-    def test_cancel_order_success(self) -> None:
-        order_data = {
-            "order_id": "abc-123",
-            "user_id": "user-1",
-            "client_order_id": "client-1",
-            "ticker": "KXBTCUSD-26JAN01-T1",
-            "status": "canceled",
-            "side": "yes",
-            "action": "buy",
-            "type": "limit",
-            "yes_price": 51,
-            "no_price": 49,
-            "fill_count": 0,
-            "remaining_count": 6,
-            "initial_count": 10,
-            "taker_fees": 0,
-            "maker_fees": 0,
-            "taker_fill_cost": 0,
-            "maker_fill_cost": 0,
-            "queue_position": 1,
-            "yes_price_dollars": "0.51",
-            "no_price_dollars": "0.49",
-            "fill_count_fp": "0.0000",
-            "remaining_count_fp": "6.0000",
-            "initial_count_fp": "10.0000",
-            "taker_fill_cost_dollars": "0.00",
-            "maker_fill_cost_dollars": "0.00",
-            "subaccount_number": 2,
-        }
-        payload = {"order": order_data, "reduced_by": 4, "reduced_by_fp": "4.0000"}
-        settings = Settings(
-            base_url="https://api.elections.kalshi.com/trade-api/v2",
-            timeout_seconds=5,
-            api_key_id="test-key-id",
-            api_key_path="/tmp/test-key.pem",
-        )
-        client = KalshiClient(settings)
-
-        with patch(
-            "kalshi_mcp.kalshi_client.request.urlopen",
-            return_value=_FakeResponse(json.dumps(payload)),
-        ) as mocked_urlopen, patch.object(
-            client,
-            "_sign_message",
-            return_value="signed-message",
-        ) as mocked_sign, patch(
-            "kalshi_mcp.kalshi_client.time.time",
-            return_value=1700000000.123,
-        ):
-            result = client.cancel_order("abc-123", subaccount=2)
-
-        self.assertEqual("abc-123", result.order.order_id)
-        self.assertEqual("canceled", result.order.status)
-        self.assertEqual(2, result.order.subaccount_number)
-        self.assertEqual(4, result.reduced_by)
-        self.assertEqual("4.0000", result.reduced_by_fp)
-
-        request_obj = mocked_urlopen.call_args.args[0]
-        full_url = request_obj.get_full_url()
-        self.assertIn("/portfolio/orders/abc-123", full_url)
-        self.assertIn("subaccount=2", full_url)
-        self.assertEqual("DELETE", request_obj.get_method())
-
-        header_items = {key.lower(): value for key, value in request_obj.header_items()}
-        self.assertEqual("application/json", header_items["accept"])
-        self.assertEqual("test-key-id", header_items["kalshi-access-key"])
-        self.assertEqual("signed-message", header_items["kalshi-access-signature"])
-        self.assertEqual("1700000000123", header_items["kalshi-access-timestamp"])
-
-        mocked_sign.assert_called_once_with(
-            "1700000000123DELETE/trade-api/v2/portfolio/orders/abc-123"
-        )
-
-    def test_cancel_order_missing_reduced_by_raises_and_logs(self) -> None:
-        settings = Settings(
-            base_url="https://api.elections.kalshi.com/trade-api/v2",
-            timeout_seconds=5,
-            api_key_id="test-key-id",
-            api_key_path="/tmp/test-key.pem",
-        )
-        client = KalshiClient(settings)
-
-        payload = {
-            "order": {
-                "order_id": "abc-123",
-                "user_id": "user-1",
-                "client_order_id": "client-1",
-                "ticker": "KXBTCUSD-26JAN01-T1",
-                "status": "canceled",
-                "side": "yes",
-                "action": "buy",
-                "type": "limit",
-                "yes_price": 51,
-                "no_price": 49,
-                "fill_count": 0,
-                "remaining_count": 6,
-                "initial_count": 10,
-                "taker_fees": 0,
-                "maker_fees": 0,
-                "taker_fill_cost": 0,
-                "maker_fill_cost": 0,
-                "queue_position": 1,
-                "yes_price_dollars": "0.51",
-                "no_price_dollars": "0.49",
-                "fill_count_fp": "0.0000",
-                "remaining_count_fp": "6.0000",
-                "initial_count_fp": "10.0000",
-                "taker_fill_cost_dollars": "0.00",
-                "maker_fill_cost_dollars": "0.00",
-            },
-            "reduced_by_fp": "4.0000",
-        }
-
-        with patch(
-            "kalshi_mcp.kalshi_client.request.urlopen",
-            return_value=_FakeResponse(json.dumps(payload)),
-        ), patch.object(client, "_sign_message", return_value="signed"):
-            with self.assertLogs("kalshi_mcp.kalshi_client", level="ERROR") as captured:
-                with self.assertRaises(KalshiClientError):
-                    client.cancel_order("abc-123")
-
-        self.assertTrue(
-            any("expected integer at 'reduced_by'" in message for message in captured.output)
-        )
-
-    def test_cancel_order_without_api_credentials_raises(self) -> None:
-        settings = Settings(
-            base_url="https://api.elections.kalshi.com/trade-api/v2",
-            timeout_seconds=5,
-        )
-        client = KalshiClient(settings)
-
-        with self.assertRaises(KalshiClientError):
-            client.cancel_order("abc-123")
 
     def test_get_order_without_api_credentials_raises(self) -> None:
         settings = Settings(

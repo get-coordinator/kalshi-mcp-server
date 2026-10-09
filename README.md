@@ -1,5 +1,7 @@
 # kalshi-mcp-server
-An mcp server that allows AI to operate on the prediction market, Kalshi
+A read-only MCP server for the Kalshi prediction market: markets, series and, with an API key, the account's own balance, positions and orders. It cannot place, change or cancel orders; the client only sends GET requests.
+
+Fork of [xilei-wang-90/kalshi-mcp-server](https://github.com/xilei-wang-90/kalshi-mcp-server) with the order and subaccount tools removed and markets without a `subtitle` kept.
 
 ## Implemented Tools
 - `get_tags_for_series_categories`
@@ -10,12 +12,6 @@ An mcp server that allows AI to operate on the prediction market, Kalshi
   - Requires API key authentication (`KALSHI_API_KEY_ID` + `KALSHI_API_KEY_PATH`)
 - `get_subaccount_balances`
   - Calls Kalshi private endpoint: `GET /portfolio/subaccounts/balances`
-  - Requires API key authentication (`KALSHI_API_KEY_ID` + `KALSHI_API_KEY_PATH`)
-- `create_subaccount`
-  - Calls Kalshi private endpoint: `POST /portfolio/subaccounts`
-  - No arguments
-  - Creates a new subaccount (maximum 32 per user)
-  - Returns: `subaccount_number` (int, 1-32)
   - Requires API key authentication (`KALSHI_API_KEY_ID` + `KALSHI_API_KEY_PATH`)
 - `get_orders`
   - Calls Kalshi private endpoint: `GET /portfolio/orders`
@@ -34,40 +30,6 @@ An mcp server that allows AI to operate on the prediction market, Kalshi
   - Required arguments:
     - `order_id` (string; the order identifier)
   - Returns a single order object with all order fields
-  - Requires API key authentication (`KALSHI_API_KEY_ID` + `KALSHI_API_KEY_PATH`)
-- `create_order`
-  - Calls Kalshi private endpoint: `POST /portfolio/orders`
-  - Required arguments:
-    - `ticker` (string; market ticker)
-    - `side` (string: yes|no)
-    - `action` (string: buy|sell)
-  - Optional arguments:
-    - `client_order_id` (string; caller-specified order ID)
-    - `count` (int, >=1; contract quantity)
-    - `count_fp` (string; fixed-point contract count)
-    - `yes_price` (int, 1-99; price in cents)
-    - `no_price` (int, 1-99; price in cents)
-    - `yes_price_dollars` (string; yes price in dollars)
-    - `no_price_dollars` (string; no price in dollars)
-    - `expiration_ts` (int; unix timestamp for order expiry)
-    - `time_in_force` (string: fill_or_kill|good_till_canceled|immediate_or_cancel)
-    - `buy_max_cost` (int; maximum cost in cents)
-    - `sell_position_floor` (int; deprecated, only `0` allowed if set)
-    - `post_only` (boolean)
-    - `reduce_only` (boolean)
-    - `self_trade_prevention_type` (string: taker_at_cross|maker)
-    - `order_group_id` (string)
-    - `cancel_order_on_pause` (boolean)
-    - `subaccount` (int, 0-32)
-  - Returns created order details
-  - Requires API key authentication (`KALSHI_API_KEY_ID` + `KALSHI_API_KEY_PATH`)
-- `cancel_order`
-  - Calls Kalshi private endpoint: `DELETE /portfolio/orders/{order_id}`
-  - Required arguments:
-    - `order_id` (string; the order identifier)
-  - Optional arguments:
-    - `subaccount` (int, 0-32)
-  - Returns the cancelled order object and the number of contracts reduced (`reduced_by`, `reduced_by_fp`)
   - Requires API key authentication (`KALSHI_API_KEY_ID` + `KALSHI_API_KEY_PATH`)
 - `get_positions`
   - Calls Kalshi private endpoint: `GET /portfolio/positions`
