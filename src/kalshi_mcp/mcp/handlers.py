@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime, timedelta, timezone
 
 from typing import Any, Callable
 
@@ -577,16 +578,60 @@ def handle_get_open_markets_for_series(
         or 1000
     )
 
+    days = (
+        _parse_optional_int(
+            args,
+            "closes_within_days",
+            type_error="closes_within_days must be an integer.",
+            range_error="closes_within_days must be between 1 and 365.",
+            min_value=1,
+            max_value=365,
+        )
+        or 8
+    )
+    most = (
+        _parse_optional_int(
+            args,
+            "max_markets",
+            type_error="max_markets must be an integer.",
+            range_error="max_markets must be between 1 and 500.",
+            min_value=1,
+            max_value=500,
+        )
+        or 60
+    )
+
     markets, pages = _page_open_markets_for_series(
         metadata_service, series_ticker=series_ticker, limit=limit, max_pages=max_pages
     )
+    cutoff = datetime.now(timezone.utc) + timedelta(days=days)
+    soon = [m for m in markets if _closes_before(m.close_time, cutoff)]
+    busiest = sorted(soon, key=lambda m: -_number(m.volume_24h_fp))[:most]
     return {
         "series_ticker": series_ticker,
         "status": "open",
-        "markets": [_serialize_market(m) for m in markets],
-        "count": len(markets),
+        "closes_within_days": days,
+        "markets": [_compact_market(m) for m in busiest],
+        "count": len(busiest),
+        "more_markets": len(soon) - len(busiest),
         "pages": pages,
     }
+
+
+def _closes_before(close_time: str | None, cutoff: datetime) -> bool:
+    if not close_time:
+        return True
+    try:
+        return datetime.fromisoformat(close_time.replace("Z", "+00:00")) <= cutoff
+    except ValueError:
+        return True
+
+
+def _number(value: str | None) -> float:
+    try:
+        return float(value or 0)
+    except ValueError:
+        return 0.0
 
 
 def handle_get_open_market_titles_for_series(
@@ -741,106 +786,22 @@ def _serialize_settlement_source(source: SettlementSource) -> dict[str, str]:
 
 
 def _serialize_markets_list(markets_list: MarketsList) -> dict[str, Any]:
-    serialized: dict[str, Any] = {"markets": [_serialize_market(item) for item in markets_list.markets]}
+    serialized: dict[str, Any] = {"markets": [_compact_market(item) for item in markets_list.markets]}
     if markets_list.cursor is not None:
         serialized["cursor"] = markets_list.cursor
     return serialized
 
 
-def _serialize_market(market: Market) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "ticker": market.ticker,
-        "event_ticker": market.event_ticker,
-        "market_type": market.market_type,
-        "title": market.title,
-        "subtitle": market.subtitle,
-        "status": market.status,
-    }
-
-    _maybe(payload, "series_ticker", market.series_ticker)
-    _maybe(payload, "yes_sub_title", market.yes_sub_title)
-    _maybe(payload, "no_sub_title", market.no_sub_title)
-    _maybe(payload, "created_time", market.created_time)
-    _maybe(payload, "updated_time", market.updated_time)
-    _maybe(payload, "open_time", market.open_time)
-    _maybe(payload, "close_time", market.close_time)
-    _maybe(payload, "expiration_time", market.expiration_time)
-    _maybe(payload, "latest_expiration_time", market.latest_expiration_time)
-    _maybe(payload, "response_price_units", market.response_price_units)
-
-    _maybe(payload, "settlement_timer_seconds", market.settlement_timer_seconds)
-    _maybe(payload, "yes_bid", market.yes_bid)
-    _maybe(payload, "yes_ask", market.yes_ask)
-    _maybe(payload, "no_bid", market.no_bid)
-    _maybe(payload, "no_ask", market.no_ask)
-    _maybe(payload, "last_price", market.last_price)
-    _maybe(payload, "volume", market.volume)
-    _maybe(payload, "volume_24h", market.volume_24h)
-    _maybe(payload, "open_interest", market.open_interest)
-    _maybe(payload, "notional_value", market.notional_value)
-    _maybe(payload, "previous_yes_bid", market.previous_yes_bid)
-    _maybe(payload, "previous_yes_ask", market.previous_yes_ask)
-    _maybe(payload, "previous_price", market.previous_price)
-    _maybe(payload, "liquidity", market.liquidity)
-    _maybe(payload, "tick_size", market.tick_size)
-    _maybe(payload, "settlement_value", market.settlement_value)
-    _maybe(payload, "floor_strike", market.floor_strike)
-    _maybe(payload, "cap_strike", market.cap_strike)
-
-    _maybe(payload, "yes_bid_dollars", market.yes_bid_dollars)
-    _maybe(payload, "yes_ask_dollars", market.yes_ask_dollars)
-    _maybe(payload, "no_bid_dollars", market.no_bid_dollars)
-    _maybe(payload, "no_ask_dollars", market.no_ask_dollars)
-    _maybe(payload, "last_price_dollars", market.last_price_dollars)
-    _maybe(payload, "volume_fp", market.volume_fp)
-    _maybe(payload, "volume_24h_fp", market.volume_24h_fp)
-    _maybe(payload, "open_interest_fp", market.open_interest_fp)
-    _maybe(payload, "notional_value_dollars", market.notional_value_dollars)
-    _maybe(payload, "previous_yes_bid_dollars", market.previous_yes_bid_dollars)
-    _maybe(payload, "previous_yes_ask_dollars", market.previous_yes_ask_dollars)
-    _maybe(payload, "previous_price_dollars", market.previous_price_dollars)
-    _maybe(payload, "liquidity_dollars", market.liquidity_dollars)
-    _maybe(payload, "settlement_value_dollars", market.settlement_value_dollars)
-
-    _maybe(payload, "result", market.result)
-    _maybe(payload, "can_close_early", market.can_close_early)
-    _maybe(payload, "expiration_value", market.expiration_value)
-    _maybe(payload, "rules_primary", market.rules_primary)
-    _maybe(payload, "rules_secondary", market.rules_secondary)
-    _maybe(payload, "price_level_structure", market.price_level_structure)
-    if market.price_ranges is not None:
-        payload["price_ranges"] = [_serialize_price_range(item) for item in market.price_ranges]
-    _maybe(payload, "expected_expiration_time", market.expected_expiration_time)
-    _maybe(payload, "settlement_ts", market.settlement_ts)
-    _maybe(payload, "fee_waiver_expiration_time", market.fee_waiver_expiration_time)
-    _maybe(payload, "early_close_condition", market.early_close_condition)
-    _maybe(payload, "strike_type", market.strike_type)
-    _maybe(payload, "functional_strike", market.functional_strike)
-    if market.custom_strike is not None:
-        payload["custom_strike"] = market.custom_strike
-    _maybe(payload, "mve_collection_ticker", market.mve_collection_ticker)
-    if market.mve_selected_legs is not None:
-        payload["mve_selected_legs"] = [
-            _serialize_mve_selected_leg(item) for item in market.mve_selected_legs
-        ]
-    _maybe(payload, "primary_participant_key", market.primary_participant_key)
-    _maybe(payload, "is_provisional", market.is_provisional)
-
-    return payload
-
-
-def _serialize_price_range(item: PriceRange) -> dict[str, str]:
-    return {"start": item.start, "end": item.end, "step": item.step}
-
-
-def _serialize_mve_selected_leg(item: MveSelectedLeg) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "event_ticker": item.event_ticker,
-        "market_ticker": item.market_ticker,
-        "side": item.side,
-    }
-    _maybe(payload, "yes_settlement_value_dollars", item.yes_settlement_value_dollars)
-    return payload
+def _compact_market(market: Market) -> dict[str, Any]:
+    """A market as a line: who, its prices and volume, when it closes. A slate of
+    full market objects (rules text and all) overflows what the caller can read."""
+    row: dict[str, Any] = {"ticker": market.ticker, "title": market.title}
+    for key in ("yes_sub_title", "status", "yes_bid_dollars", "yes_ask_dollars", "last_price_dollars",
+                "previous_price_dollars", "volume_fp", "volume_24h_fp", "close_time"):
+        value = getattr(market, key, None)
+        if value not in (None, ""):
+            row[key] = value
+    return row
 
 
 def handle_get_order(

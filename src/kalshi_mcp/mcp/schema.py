@@ -235,6 +235,18 @@ GET_OPEN_MARKETS_FOR_SERIES_TOOL = {
                 "minimum": 1,
                 "maximum": 10000,
             },
+            "closes_within_days": {
+                "type": "integer",
+                "description": "Only markets that close within this many days (default 8: this week's games).",
+                "minimum": 1,
+                "maximum": 365,
+            },
+            "max_markets": {
+                "type": "integer",
+                "description": "At most this many markets, the busiest by 24h volume (default 60); more_markets says how many were left out.",
+                "minimum": 1,
+                "maximum": 500,
+            },
         },
         "required": ["series_ticker"],
         "additionalProperties": False,
