@@ -1170,8 +1170,12 @@ def search_terms(query: str) -> str:
     return " ".join(w for w in words if any(c.isalnum() for c in w))
 
 
+_SEARCH_MARKETS_PER_EVENT = 10
+
+
 def _serialize_search_event(event: dict[str, Any]) -> dict[str, Any]:
     series = event.get("series_ticker")
+    markets = [m for m in event.get("markets") or [] if isinstance(m, dict)]
     return {
         "event_ticker": event.get("event_ticker"),
         "series_ticker": series,
@@ -1188,7 +1192,7 @@ def _serialize_search_event(event: dict[str, Any]) -> dict[str, Any]:
                 "last_price_dollars": m.get("last_price_dollars"),
                 "closes": m.get("close_ts"),
             }
-            for m in event.get("markets") or []
-            if isinstance(m, dict)
+            for m in markets[:_SEARCH_MARKETS_PER_EVENT]
         ],
+        "more_markets": max(len(markets) - _SEARCH_MARKETS_PER_EVENT, 0),
     }
