@@ -3,6 +3,10 @@ A read-only MCP server for the Kalshi prediction market: markets, series and, wi
 
 Fork of [xilei-wang-90/kalshi-mcp-server](https://github.com/xilei-wang-90/kalshi-mcp-server) with the order and subaccount tools removed and markets without a `subtitle` kept.
 
+## Categories
+
+Every tool is limited to Kalshi's Sports, Economics, Crypto, Science and Technology, Financials, Politics and Elections categories (`src/kalshi_mcp/scope.py`): other categories, tags and series are never listed, markets, orders and positions outside them are dropped, and asking for one by name is refused. `get_markets` leaves out multi-category combo markets unless `mve_filter` says otherwise.
+
 ## Hosted over HTTP
 
 `kalshi-mcp-http` serves stateless Streamable HTTP at `POST /mcp` (and `GET /healthz`) for many users at once:

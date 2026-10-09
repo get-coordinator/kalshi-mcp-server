@@ -25,6 +25,7 @@ from .mcp.schema import (
     GET_TAGS_FOR_SERIES_CATEGORIES_TOOL,
     GET_TAGS_FOR_SERIES_CATEGORY_TOOL,
 )
+from .scope import CategoryScope
 from .services import MetadataService, PortfolioService
 from .settings import Settings, load_settings
 
@@ -60,13 +61,13 @@ class ToolRegistry:
         return handler(arguments)
 
 
-def create_tool_registry(settings: Settings | None = None) -> ToolRegistry:
+def create_tool_registry(settings: Settings | None = None) -> CategoryScope:
     resolved_settings = settings or load_settings()
     client = KalshiClient(resolved_settings)
     metadata_service = MetadataService(client)
     portfolio_service = PortfolioService(client)
     handlers = build_tool_handlers(metadata_service, portfolio_service)
-    return ToolRegistry(handlers)
+    return CategoryScope(ToolRegistry(handlers))
 
 
 class StdioMCPServer:
