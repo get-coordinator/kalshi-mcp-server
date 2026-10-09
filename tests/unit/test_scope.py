@@ -96,3 +96,17 @@ class SearchTermsTest(unittest.TestCase):
         self.assertEqual(search_terms("What are Kalshi’s odds for the Commanders vs 49ers game on Oct 19?"), "Commanders 49ers")
         self.assertEqual(search_terms("Fed decision October"), "Fed decision")
         self.assertEqual(search_terms("Ohio State vs Michigan Nov. 28th"), "Ohio State Michigan")
+
+    def test_search_ranks_by_the_words_asked(self) -> None:
+        from kalshi_mcp.mcp.handlers import handle_search_markets
+
+        class Svc:
+            def search_events(self, query, page):
+                return [
+                    {"event_ticker": "KXRATECUT-26DEC", "event_title": "Will the Fed cut rates before 2027?", "markets": []},
+                    {"event_ticker": "KXFEDDECISION-26OCT", "event_title": "Fed decision in October?",
+                     "markets": [{"title": "Will the Federal Reserve Cut rates by 25bps at their October 2026 meeting?"}]},
+                ]
+
+        got = handle_search_markets(Svc(), {"query": "odds on the Fed cutting in October"})
+        self.assertEqual(got["events"][0]["event_ticker"], "KXFEDDECISION-26OCT")

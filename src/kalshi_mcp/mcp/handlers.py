@@ -1144,12 +1144,37 @@ def handle_search_markets(
     events: list[dict[str, Any]] = []
     seen: set[Any] = set()
     terms = search_terms(query)
-    for q in dict.fromkeys(q for q in (terms, query) if q):
+    words = [w for w in terms.split() if len(w) >= 3][:3]
+    for q in dict.fromkeys(q for q in (terms, query, *words) if q):
         for e in metadata_service.search_events(q, page):
             if e.get("event_ticker") not in seen:
                 seen.add(e.get("event_ticker"))
                 events.append(e)
+    wanted = _stems(query)
+    events.sort(key=lambda e: -len(wanted & _stems(_event_text(e))))
     return {"events": [_serialize_search_event(e) for e in events]}
+
+
+def _stems(text: str) -> set[str]:
+    out = set()
+    for w in re.findall(r"[a-z0-9]+", text.lower()):
+        if len(w) < 3 or w in _STOP:
+            continue
+        for suffix in ("ting", "ing", "es", "s"):
+            if w.endswith(suffix) and len(w) - len(suffix) >= 3:
+                w = w[: -len(suffix)]
+                break
+        out.add(w[:5])
+    return out
+
+
+_STOP = {"the", "what", "whats", "are", "will", "for", "and", "odds", "kalshi", "market", "markets", "price", "chance", "game"}
+
+
+def _event_text(event: dict[str, Any]) -> str:
+    parts = [str(event.get("event_title") or ""), str(event.get("event_subtitle") or "")]
+    parts += [str(m.get("title") or "") for m in event.get("markets") or [] if isinstance(m, dict)]
+    return " ".join(parts)
 
 
 _MONTHS = (
