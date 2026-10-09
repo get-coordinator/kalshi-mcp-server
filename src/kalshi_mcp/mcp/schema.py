@@ -5,8 +5,9 @@ SEARCH_MARKETS_TOOL = {
     "description": (
         "Find Kalshi prediction markets by text (a team, game, player, company, coin, person or topic) "
         "with each market's current odds: the yes price in dollars is the market's implied probability "
-        "(0.77 = 77%). Start here for any question about Kalshi odds. Covers sports, economics, crypto, "
-        "tech, finance and politics."
+        "(0.77 = 77%). Start here for any question about Kalshi odds. Search with names (teams, people, "
+        "companies, coins), not dates: each event's subtitle has its date to match. Covers sports, "
+        "economics, crypto, tech, finance and politics."
     ),
     "inputSchema": {
         "type": "object",

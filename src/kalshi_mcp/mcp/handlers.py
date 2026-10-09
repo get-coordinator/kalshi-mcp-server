@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from typing import Any, Callable
 
 from ..models import (
@@ -1138,8 +1140,34 @@ def handle_search_markets(
         )
         or 5
     )
-    events = metadata_service.search_events(query, min(limit * 3, 60))
+    page = min(limit * 3, 60)
+    events: list[dict[str, Any]] = []
+    seen: set[Any] = set()
+    terms = search_terms(query)
+    for q in dict.fromkeys(q for q in (terms, query) if q):
+        for e in metadata_service.search_events(q, page):
+            if e.get("event_ticker") not in seen:
+                seen.add(e.get("event_ticker"))
+                events.append(e)
     return {"events": [_serialize_search_event(e) for e in events]}
+
+
+_MONTHS = (
+    "january|february|march|april|may|june|july|august|september|october|november|december|"
+    "jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec"
+)
+_NOISE = re.compile(
+    rf"[\u2019']s\b|\b(?:(?:{_MONTHS})\b\.?|\d+(?:st|nd|rd|th)?\b|(?:vs|v|versus|odds|kalshi|market|markets|"
+    r"game|games|match|price|prices|chance|chances|the|on|for|of|at|in|and|what|whats|are|is|will|win|wins|"
+    r"today|tonight|tomorrow|week|weekend)\b\.?)",
+    re.IGNORECASE,
+)
+
+
+def search_terms(query: str) -> str:
+    """The names in a query: Kalshi's search matches words, so dates and filler push the right event down."""
+    words = re.sub(r"[^\w\s'&.-]", " ", _NOISE.sub(" ", query)).split()
+    return " ".join(w for w in words if any(c.isalnum() for c in w))
 
 
 def _serialize_search_event(event: dict[str, Any]) -> dict[str, Any]:

@@ -87,3 +87,12 @@ class CategoryScopeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SearchTermsTest(unittest.TestCase):
+    def test_keeps_names_drops_dates_and_filler(self) -> None:
+        from kalshi_mcp.mcp.handlers import search_terms
+
+        self.assertEqual(search_terms("What are Kalshi’s odds for the Commanders vs 49ers game on Oct 19?"), "Commanders 49ers")
+        self.assertEqual(search_terms("Fed decision October"), "Fed decision")
+        self.assertEqual(search_terms("Ohio State vs Michigan Nov. 28th"), "Ohio State Michigan")
