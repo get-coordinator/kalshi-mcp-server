@@ -146,6 +146,9 @@ def build_tool_handlers(
         "get_series_tickers_for_category": lambda arguments: (
             handle_get_series_tickers_for_category(metadata_service, arguments)
         ),
+        "search_markets": lambda arguments: (
+            handle_search_markets(metadata_service, arguments)
+        ),
         "get_orders": lambda arguments: (
             handle_get_orders(portfolio_service, arguments)
         ),
@@ -1112,3 +1115,52 @@ def _serialize_event_position(pos: EventPosition) -> dict[str, Any]:
 def _maybe(payload: dict[str, Any], key: str, value: Any) -> None:
     if value is not None:
         payload[key] = value
+
+
+def handle_search_markets(
+    metadata_service: MetadataService, arguments: dict[str, Any] | None
+) -> dict[str, Any]:
+    args = _require_arguments(arguments, "search_markets")
+    query = _parse_required_str(
+        args,
+        "query",
+        type_error="query must be a string.",
+        empty_error="query must be a non-empty string.",
+    )
+    limit = (
+        _parse_optional_int(
+            args,
+            "limit",
+            type_error="limit must be an integer.",
+            range_error="limit must be between 1 and 20.",
+            min_value=1,
+            max_value=20,
+        )
+        or 5
+    )
+    events = metadata_service.search_events(query, min(limit * 3, 60))
+    return {"events": [_serialize_search_event(e) for e in events]}
+
+
+def _serialize_search_event(event: dict[str, Any]) -> dict[str, Any]:
+    series = event.get("series_ticker")
+    return {
+        "event_ticker": event.get("event_ticker"),
+        "series_ticker": series,
+        "title": event.get("event_title"),
+        "subtitle": event.get("event_subtitle"),
+        "category": event.get("category"),
+        "url": f"https://kalshi.com/markets/{str(series).lower()}" if series else None,
+        "markets": [
+            {
+                "ticker": m.get("ticker"),
+                "title": m.get("title") or m.get("yes_subtitle"),
+                "yes_bid_dollars": m.get("yes_bid_dollars"),
+                "yes_ask_dollars": m.get("yes_ask_dollars"),
+                "last_price_dollars": m.get("last_price_dollars"),
+                "closes": m.get("close_ts"),
+            }
+            for m in event.get("markets") or []
+            if isinstance(m, dict)
+        ],
+    }

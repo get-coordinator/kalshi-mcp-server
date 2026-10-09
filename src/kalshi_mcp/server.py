@@ -24,6 +24,7 @@ from .mcp.schema import (
     GET_SUBACCOUNT_BALANCES_TOOL,
     GET_TAGS_FOR_SERIES_CATEGORIES_TOOL,
     GET_TAGS_FOR_SERIES_CATEGORY_TOOL,
+    SEARCH_MARKETS_TOOL,
 )
 from .scope import CategoryScope
 from .services import MetadataService, PortfolioService
@@ -39,6 +40,7 @@ class ToolRegistry:
 
     def list_tools(self) -> list[dict[str, Any]]:
         return [
+            SEARCH_MARKETS_TOOL,
             GET_TAGS_FOR_SERIES_CATEGORIES_TOOL,
             GET_BALANCE_TOOL,
             GET_SUBACCOUNT_BALANCES_TOOL,

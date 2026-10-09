@@ -1359,8 +1359,16 @@ class KalshiClient:
 
         return base64.b64encode(signature).decode("ascii")
 
-    def _get_json(self, path: str, *, authenticated: bool = False) -> dict[str, Any]:
-        url = f"{self._base_url}{path}"
+    def search_events(self, query: str, page_size: int) -> list[dict[str, Any]]:
+        """Kalshi's site search: events matching text, each with its markets and prices."""
+        root = self._base_url.split("/trade-api/", 1)[0]
+        params = parse.urlencode({"query": query, "order_by": "querymatch", "page_size": page_size})
+        payload = self._get_json("", url=f"{root}/v1/search/series?{params}")
+        results = payload.get("current_page")
+        return [r for r in results if isinstance(r, dict)] if isinstance(results, list) else []
+
+    def _get_json(self, path: str, *, authenticated: bool = False, url: str | None = None) -> dict[str, Any]:
+        url = url or f"{self._base_url}{path}"
         headers = {"Accept": "application/json"}
         if authenticated:
             headers.update(self._require_auth_headers("GET", path))

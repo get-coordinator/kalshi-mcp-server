@@ -76,7 +76,10 @@ class CategoryScope:
 
         result = self._registry.call_tool(tool_name, arguments)
 
-        if tool_name == "get_categories":
+        if tool_name == "search_markets":
+            limit = args.get("limit") or 5
+            result["events"] = [e for e in result.get("events") or [] if e.get("category") in ALLOWED_CATEGORIES][:limit]
+        elif tool_name == "get_categories":
             result["categories"] = [c for c in result.get("categories") or [] if c in ALLOWED_CATEGORIES]
         elif tool_name == "get_tags_for_series_categories":
             tags = result.get("tags_by_categories") or {}

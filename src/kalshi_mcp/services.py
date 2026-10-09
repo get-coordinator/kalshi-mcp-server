@@ -1,5 +1,7 @@
 """Application-level use cases."""
 
+from typing import Any
+
 from .kalshi_client import KalshiClient
 from .models import (
     MarketsList,
@@ -14,6 +16,9 @@ from .models import (
 
 
 class MetadataService:
+    def search_events(self, query: str, page_size: int) -> list[dict[str, Any]]:
+        return self._client.search_events(query, page_size)
+
     def __init__(self, client: KalshiClient) -> None:
         self._client = client
 

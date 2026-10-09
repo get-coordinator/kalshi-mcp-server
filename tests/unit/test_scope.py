@@ -32,6 +32,12 @@ class _Fake:
             return {"order_id": args["order_id"], "ticker": "KXOSCARS-27-BP"}
         if name == "get_balance":
             return {"balance": 100}
+        if name == "search_markets":
+            return {"events": [
+                {"event_ticker": "KXOSCARS-27", "category": "Entertainment"},
+                {"event_ticker": "KXNFLGAME-26OCT19WASSF", "category": "Sports"},
+                {"event_ticker": "KXFED-26OCT", "category": "Economics"},
+            ]}
         raise AssertionError(name)
 
 
@@ -62,6 +68,10 @@ class CategoryScopeTest(unittest.TestCase):
         positions = self.scope.call_tool("get_positions", {})
         self.assertEqual([p["ticker"] for p in positions["market_positions"]], ["KXNFLWINS-BUF-26-T10"])
         self.assertEqual([p["event_ticker"] for p in positions["event_positions"]], ["KXFED-26DEC"])
+
+    def test_search_keeps_allowed_categories(self) -> None:
+        got = self.scope.call_tool("search_markets", {"query": "x", "limit": 1})
+        self.assertEqual([e["event_ticker"] for e in got["events"]], ["KXNFLGAME-26OCT19WASSF"])
 
     def test_balance_is_the_whole_account(self) -> None:
         self.assertEqual(self.scope.call_tool("get_balance")["balance"], 100)

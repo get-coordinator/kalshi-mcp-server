@@ -196,6 +196,7 @@ class StdioServerTests(unittest.TestCase):
         tool_names = [tool["name"] for tool in tools_list_response["result"]["tools"]]
         self.assertEqual(
             [
+                "search_markets",
                 "get_tags_for_series_categories",
                 "get_balance",
                 "get_subaccount_balances",

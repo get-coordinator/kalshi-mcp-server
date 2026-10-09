@@ -1,10 +1,28 @@
 """MCP tool schemas and I/O models."""
 
+SEARCH_MARKETS_TOOL = {
+    "name": "search_markets",
+    "description": (
+        "Find Kalshi prediction markets by text (a team, game, player, company, coin, person or topic) "
+        "with each market's current odds: the yes price in dollars is the market's implied probability "
+        "(0.77 = 77%). Start here for any question about Kalshi odds. Covers sports, economics, crypto, "
+        "tech, finance and politics."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "What to look for, e.g. \"Commanders 49ers\" or \"Fed October\"."},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 20, "description": "Events to return (default 5)."},
+        },
+        "required": ["query"],
+        "additionalProperties": False,
+    },
+}
+
 GET_TAGS_FOR_SERIES_CATEGORIES_TOOL = {
     "name": "get_tags_for_series_categories",
     "description": (
-        "Get Kalshi tags grouped by series categories. "
-        "Uses the public GET /search/tags_by_categories endpoint."
+        "Kalshi's sub-topics (tags like Football, Basketball, Fed, Bitcoin) for every category COORDINATOR covers (sports, economics, crypto, tech, finance and politics)."
     ),
     "inputSchema": {
         "type": "object",
@@ -16,8 +34,7 @@ GET_TAGS_FOR_SERIES_CATEGORIES_TOOL = {
 GET_BALANCE_TOOL = {
     "name": "get_balance",
     "description": (
-        "Get your Kalshi portfolio balance and portfolio value. "
-        "Uses GET /portfolio/balance (requires API key authentication)."
+        "The user's own Kalshi cash balance and portfolio value (needs their read-only API key)."
     ),
     "inputSchema": {
         "type": "object",
@@ -29,8 +46,7 @@ GET_BALANCE_TOOL = {
 GET_CATEGORIES_TOOL = {
     "name": "get_categories",
     "description": (
-        "Get all Kalshi categories. "
-        "Uses the public GET /search/tags_by_categories endpoint."
+        "The Kalshi prediction market categories COORDINATOR covers: sports, economics, crypto, tech, finance and politics."
     ),
     "inputSchema": {
         "type": "object",
@@ -42,8 +58,7 @@ GET_CATEGORIES_TOOL = {
 GET_TAGS_FOR_SERIES_CATEGORY_TOOL = {
     "name": "get_tags_for_series_category",
     "description": (
-        "Get Kalshi tags for a single series category. "
-        "Uses the public GET /search/tags_by_categories endpoint."
+        "Kalshi's sub-topics (tags) within one category, e.g. Football or Basketball in Sports."
     ),
     "inputSchema": {
         "type": "object",
@@ -62,8 +77,7 @@ GET_TAGS_FOR_SERIES_CATEGORY_TOOL = {
 GET_SERIES_LIST_TOOL = {
     "name": "get_series_list",
     "description": (
-        "Get Kalshi market series list. "
-        "Uses the public GET /series endpoint."
+        "Kalshi market series: recurring families of prediction markets such as NFL games (KXNFLGAME) or Fed decisions, filterable by category and tag. Use a series ticker with the market tools."
     ),
     "inputSchema": {
         "type": "object",
@@ -105,8 +119,7 @@ GET_SERIES_LIST_TOOL = {
 GET_MARKETS_TOOL = {
     "name": "get_markets",
     "description": (
-        "Get Kalshi markets list. "
-        "Uses the public GET /markets endpoint."
+        "Kalshi prediction markets with their current prices: yes bid/ask and last price in dollars are the market's implied probability (0.77 = 77%). Filter by series_ticker, event_ticker or tickers; search_markets is usually the better start."
     ),
     "inputSchema": {
         "type": "object",
@@ -196,8 +209,7 @@ GET_MARKETS_TOOL = {
 GET_OPEN_MARKETS_FOR_SERIES_TOOL = {
     "name": "get_open_markets_for_series",
     "description": (
-        "Get all OPEN markets for a Kalshi series ticker. "
-        "Internally pages through the public GET /markets endpoint with status=open."
+        "Every open Kalshi market in one series (e.g. KXNFLGAME for NFL games, KXFEDDECISION for Fed meetings) with current prices, the market's implied odds."
     ),
     "inputSchema": {
         "type": "object",
@@ -231,8 +243,7 @@ GET_OPEN_MARKETS_FOR_SERIES_TOOL = {
 GET_OPEN_MARKET_TITLES_FOR_SERIES_TOOL = {
     "name": "get_open_market_titles_for_series",
     "description": (
-        "Get ticker + title + subtitle + yes_sub_title + no_sub_title for all OPEN markets in a Kalshi series ticker. "
-        "Internally pages through the public GET /markets endpoint with status=open."
+        "The titles of every open Kalshi market in one series, to find the right market ticker without the price detail."
     ),
     "inputSchema": {
         "type": "object",
@@ -266,8 +277,7 @@ GET_OPEN_MARKET_TITLES_FOR_SERIES_TOOL = {
 GET_SUBACCOUNT_BALANCES_TOOL = {
     "name": "get_subaccount_balances",
     "description": (
-        "Get balances for all subaccounts in your Kalshi portfolio. "
-        "Uses GET /portfolio/subaccounts/balances (requires API key authentication)."
+        "The user's own Kalshi subaccount balances (needs their read-only API key)."
     ),
     "inputSchema": {
         "type": "object",
@@ -279,8 +289,7 @@ GET_SUBACCOUNT_BALANCES_TOOL = {
 GET_ORDERS_TOOL = {
     "name": "get_orders",
     "description": (
-        "Get your Kalshi portfolio orders. "
-        "Uses GET /portfolio/orders (requires API key authentication)."
+        "The user's own Kalshi orders (needs their read-only API key)."
     ),
     "inputSchema": {
         "type": "object",
@@ -335,8 +344,7 @@ GET_ORDERS_TOOL = {
 GET_ORDER_TOOL = {
     "name": "get_order",
     "description": (
-        "Get a single Kalshi portfolio order by ID. "
-        "Uses GET /portfolio/orders/{order_id} (requires API key authentication)."
+        "One of the user's own Kalshi orders by its id (needs their read-only API key)."
     ),
     "inputSchema": {
         "type": "object",
@@ -355,8 +363,7 @@ GET_ORDER_TOOL = {
 GET_POSITIONS_TOOL = {
     "name": "get_positions",
     "description": (
-        "Get your Kalshi portfolio positions. "
-        "Uses GET /portfolio/positions (requires API key authentication)."
+        "The user's own Kalshi positions and their value (needs their read-only API key)."
     ),
     "inputSchema": {
         "type": "object",
@@ -403,8 +410,7 @@ GET_POSITIONS_TOOL = {
 GET_SERIES_TICKERS_FOR_CATEGORY_TOOL = {
     "name": "get_series_tickers_for_category",
     "description": (
-        "Get all Kalshi series tickers for a particular category. "
-        "Internally pages through the public GET /series endpoint and extracts `ticker`."
+        "Every Kalshi series ticker in one category COORDINATOR covers (sports, economics, crypto, tech, finance and politics)."
     ),
     "inputSchema": {
         "type": "object",
