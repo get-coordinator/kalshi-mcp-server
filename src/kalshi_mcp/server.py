@@ -11,9 +11,6 @@ from .kalshi_client import KalshiClient
 from .mcp.handlers import ToolHandler, build_tool_handlers
 from .mcp.resources import ResourceRegistry
 from .mcp.schema import (
-    CANCEL_ORDER_TOOL,
-    CREATE_ORDER_TOOL,
-    CREATE_SUBACCOUNT_TOOL,
     GET_BALANCE_TOOL,
     GET_CATEGORIES_TOOL,
     GET_MARKETS_TOOL,
@@ -27,7 +24,9 @@ from .mcp.schema import (
     GET_SUBACCOUNT_BALANCES_TOOL,
     GET_TAGS_FOR_SERIES_CATEGORIES_TOOL,
     GET_TAGS_FOR_SERIES_CATEGORY_TOOL,
+    SEARCH_MARKETS_TOOL,
 )
+from .scope import CategoryScope
 from .services import MetadataService, PortfolioService
 from .settings import Settings, load_settings
 
@@ -41,6 +40,7 @@ class ToolRegistry:
 
     def list_tools(self) -> list[dict[str, Any]]:
         return [
+            SEARCH_MARKETS_TOOL,
             GET_TAGS_FOR_SERIES_CATEGORIES_TOOL,
             GET_BALANCE_TOOL,
             GET_SUBACCOUNT_BALANCES_TOOL,
@@ -51,11 +51,8 @@ class ToolRegistry:
             GET_OPEN_MARKETS_FOR_SERIES_TOOL,
             GET_OPEN_MARKET_TITLES_FOR_SERIES_TOOL,
             GET_SERIES_TICKERS_FOR_CATEGORY_TOOL,
-            CREATE_SUBACCOUNT_TOOL,
             GET_ORDER_TOOL,
             GET_ORDERS_TOOL,
-            CREATE_ORDER_TOOL,
-            CANCEL_ORDER_TOOL,
             GET_POSITIONS_TOOL,
         ]
 
@@ -66,13 +63,13 @@ class ToolRegistry:
         return handler(arguments)
 
 
-def create_tool_registry(settings: Settings | None = None) -> ToolRegistry:
+def create_tool_registry(settings: Settings | None = None) -> CategoryScope:
     resolved_settings = settings or load_settings()
     client = KalshiClient(resolved_settings)
     metadata_service = MetadataService(client)
     portfolio_service = PortfolioService(client)
     handlers = build_tool_handlers(metadata_service, portfolio_service)
-    return ToolRegistry(handlers)
+    return CategoryScope(ToolRegistry(handlers))
 
 
 class StdioMCPServer:

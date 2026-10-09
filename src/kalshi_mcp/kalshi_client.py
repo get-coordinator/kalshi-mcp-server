@@ -12,9 +12,6 @@ from urllib import parse
 from urllib import error, request
 
 from .models import (
-    CancelledOrder,
-    CreateOrderParams,
-    CreatedSubaccount,
     EventPosition,
     Market,
     MarketPosition,
@@ -40,6 +37,10 @@ LOGGER = logging.getLogger(__name__)
 class KalshiClientError(RuntimeError):
     """Raised when Kalshi API requests fail."""
 
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
+
 
 class KalshiClient:
     def __init__(self, settings: Settings) -> None:
@@ -47,6 +48,7 @@ class KalshiClient:
         self._timeout_seconds = settings.timeout_seconds
         self._api_key_id = settings.api_key_id
         self._api_key_path = settings.api_key_path
+        self._api_key_pem = settings.api_key_pem
         self._cached_private_key: Any | None = None
 
     def get_tags_for_series_categories(self) -> TagsByCategories:
@@ -70,6 +72,15 @@ class KalshiClient:
                 normalized[category] = [item for item in values if isinstance(item, str)]
 
         return TagsByCategories(tags_by_categories=normalized)
+
+    def get_api_key_scopes(self) -> list[str]:
+        """Return the scopes of the key this client signs with."""
+        payload = self._get_json("/api_keys", authenticated=True)
+        for key in payload.get("api_keys") or []:
+            if isinstance(key, dict) and key.get("api_key_id") == self._api_key_id:
+                scopes = key.get("scopes")
+                return [s for s in scopes if isinstance(s, str)] if isinstance(scopes, list) else []
+        raise KalshiClientError("Kalshi did not list this API key.")
 
     def get_balance(self) -> PortfolioBalance:
         """Return authenticated user account balance."""
@@ -150,68 +161,6 @@ class KalshiClient:
             )
 
         return SubaccountBalancesList(subaccount_balances=parsed)
-
-    def create_subaccount(self) -> CreatedSubaccount:
-        """Create a new subaccount and return its number."""
-        endpoint = "/portfolio/subaccounts"
-        payload = self._post_json(endpoint, authenticated=True)
-        subaccount_number = self._require_int_field(
-            payload, "subaccount_number", endpoint=endpoint
-        )
-        return CreatedSubaccount(subaccount_number=subaccount_number)
-
-    def create_order(self, params: CreateOrderParams) -> PortfolioOrder:
-        """Create an order on Kalshi (POST /portfolio/orders)."""
-        endpoint = "/portfolio/orders"
-        body: dict[str, Any] = {
-            "ticker": params.ticker,
-            "side": params.side,
-            "action": params.action,
-        }
-        optional_fields: dict[str, Any] = {
-            "client_order_id": params.client_order_id,
-            "count": params.count,
-            "count_fp": params.count_fp,
-            "yes_price": params.yes_price,
-            "no_price": params.no_price,
-            "yes_price_dollars": params.yes_price_dollars,
-            "no_price_dollars": params.no_price_dollars,
-            "expiration_ts": params.expiration_ts,
-            "time_in_force": params.time_in_force,
-            "buy_max_cost": params.buy_max_cost,
-            "sell_position_floor": params.sell_position_floor,
-            "post_only": params.post_only,
-            "reduce_only": params.reduce_only,
-            "self_trade_prevention_type": params.self_trade_prevention_type,
-            "order_group_id": params.order_group_id,
-            "cancel_order_on_pause": params.cancel_order_on_pause,
-            "subaccount": params.subaccount,
-        }
-        for key, value in optional_fields.items():
-            if value is not None:
-                body[key] = value
-
-        payload = self._post_json(endpoint, authenticated=True, body=body)
-
-        raw_order = payload.get("order")
-        if not isinstance(raw_order, dict):
-            LOGGER.error(
-                "Unexpected %s payload: expected object at 'order', got=%s keys=%s",
-                endpoint,
-                self._describe_value(raw_order),
-                sorted(payload.keys()),
-            )
-            raise KalshiClientError(
-                "Unexpected response shape from Kalshi API: missing 'order' object."
-            )
-
-        order = self._parse_order(raw_order, 0)
-        if order is None:
-            raise KalshiClientError(
-                "Unexpected response shape from Kalshi API: "
-                "unable to parse order from response."
-            )
-        return order
 
     def get_orders(
         self,
@@ -303,48 +252,6 @@ class KalshiClient:
                 f"GET /portfolio/orders/{order_id}: unable to parse order from response."
             )
         return order
-
-    def cancel_order(self, order_id: str, *, subaccount: int | None = None) -> CancelledOrder:
-        """Cancel an order on Kalshi (DELETE /portfolio/orders/{order_id})."""
-        path = f"/portfolio/orders/{parse.quote(order_id, safe='')}"
-        if subaccount is not None:
-            path = f"{path}?subaccount={subaccount}"
-
-        payload = self._delete_json(path, authenticated=True)
-
-        raw_order = payload.get("order")
-        if not isinstance(raw_order, dict):
-            LOGGER.error(
-                "DELETE /portfolio/orders/%s: 'order' is not an object: %s",
-                order_id,
-                self._describe_value(raw_order),
-            )
-            raise KalshiClientError(
-                f"DELETE /portfolio/orders/{order_id}: expected 'order' object in response."
-            )
-
-        order = self._parse_order(raw_order, 0)
-        if order is None:
-            raise KalshiClientError(
-                f"DELETE /portfolio/orders/{order_id}: unable to parse order from response."
-            )
-
-        endpoint = f"/portfolio/orders/{order_id}"
-        reduced_by = self._require_int_field(payload, "reduced_by", endpoint=endpoint)
-
-        reduced_by_fp = payload.get("reduced_by_fp")
-        if not isinstance(reduced_by_fp, str):
-            LOGGER.error(
-                "Unexpected %s payload: expected string at 'reduced_by_fp', got=%s keys=%s",
-                endpoint,
-                self._describe_value(reduced_by_fp),
-                sorted(payload.keys()),
-            )
-            raise KalshiClientError(
-                f"Unexpected response shape from Kalshi API: missing string 'reduced_by_fp'."
-            )
-
-        return CancelledOrder(order=order, reduced_by=reduced_by, reduced_by_fp=reduced_by_fp)
 
     def get_positions(
         self,
@@ -766,7 +673,8 @@ class KalshiClient:
             path = f"{path}?{parse.urlencode(params)}"
 
         payload = self._get_json(path)
-        series_items = payload.get("series")
+        # Kalshi answers a filter with nothing in it with "series": null.
+        series_items = [] if "series" in payload and payload["series"] is None else payload.get("series")
         if not isinstance(series_items, list):
             LOGGER.error(
                 "Unexpected series-list payload: expected list at 'series', got=%s keys=%s",
@@ -851,7 +759,7 @@ class KalshiClient:
             path = f"{path}?{parse.urlencode(params)}"
 
         payload = self._get_json(path)
-        market_items = payload.get("markets")
+        market_items = [] if "markets" in payload and payload["markets"] is None else payload.get("markets")
         if not isinstance(market_items, list):
             LOGGER.error(
                 "Unexpected markets payload: expected list at 'markets', got=%s keys=%s",
@@ -1030,7 +938,6 @@ class KalshiClient:
             "event_ticker",
             "market_type",
             "title",
-            "subtitle",
             "status",
         )
         string_values: dict[str, str] = {}
@@ -1077,7 +984,7 @@ class KalshiClient:
             event_ticker=string_values["event_ticker"],
             market_type=string_values["market_type"],
             title=string_values["title"],
-            subtitle=string_values["subtitle"],
+            subtitle=self._optional_str(raw_market, "subtitle", index=index),
             status=string_values["status"],
             series_ticker=self._optional_str(raw_market, "series_ticker", index=index),
             yes_sub_title=self._optional_str(raw_market, "yes_sub_title", index=index),
@@ -1377,7 +1284,7 @@ class KalshiClient:
         return value
 
     def _require_auth_headers(self, method: str, path: str) -> dict[str, str]:
-        if not self._api_key_id or not self._api_key_path:
+        if not self._api_key_id or not (self._api_key_path or self._api_key_pem):
             raise KalshiClientError(
                 "Authenticated Kalshi endpoint requires KALSHI_API_KEY_ID and "
                 "KALSHI_API_KEY_PATH."
@@ -1414,23 +1321,30 @@ class KalshiClient:
             ) from exc
 
         if self._cached_private_key is None:
-            try:
-                with open(self._api_key_path, "rb") as key_file:
-                    key_bytes = key_file.read()
-            except OSError as exc:
-                raise KalshiClientError(
-                    f"Unable to read API key file at {self._api_key_path}: {exc}"
-                ) from exc
+            if self._api_key_pem:
+                key_bytes = self._api_key_pem.encode("utf-8")
+            else:
+                try:
+                    with open(self._api_key_path, "rb") as key_file:
+                        key_bytes = key_file.read()
+                except OSError as exc:
+                    raise KalshiClientError(
+                        f"Unable to read API key file at {self._api_key_path}: {exc}"
+                    ) from exc
 
             try:
-                self._cached_private_key = serialization.load_pem_private_key(
-                    key_bytes,
-                    password=None,
-                )
+                if key_bytes.lstrip().startswith(b"-----"):
+                    self._cached_private_key = serialization.load_pem_private_key(
+                        key_bytes,
+                        password=None,
+                    )
+                else:
+                    self._cached_private_key = serialization.load_der_private_key(
+                        base64.b64decode(key_bytes),
+                        password=None,
+                    )
             except Exception as exc:
-                raise KalshiClientError(
-                    f"Unable to load private key from {self._api_key_path}."
-                ) from exc
+                raise KalshiClientError("Unable to load the Kalshi private key.") from exc
 
         try:
             signature = self._cached_private_key.sign(
@@ -1446,8 +1360,16 @@ class KalshiClient:
 
         return base64.b64encode(signature).decode("ascii")
 
-    def _get_json(self, path: str, *, authenticated: bool = False) -> dict[str, Any]:
-        url = f"{self._base_url}{path}"
+    def search_events(self, query: str, page_size: int) -> list[dict[str, Any]]:
+        """Kalshi's site search: events matching text, each with its markets and prices."""
+        root = self._base_url.split("/trade-api/", 1)[0]
+        params = parse.urlencode({"query": query, "order_by": "querymatch", "page_size": page_size})
+        payload = self._get_json("", url=f"{root}/v1/search/series?{params}")
+        results = payload.get("current_page")
+        return [r for r in results if isinstance(r, dict)] if isinstance(results, list) else []
+
+    def _get_json(self, path: str, *, authenticated: bool = False, url: str | None = None) -> dict[str, Any]:
+        url = url or f"{self._base_url}{path}"
         headers = {"Accept": "application/json"}
         if authenticated:
             headers.update(self._require_auth_headers("GET", path))
@@ -1492,7 +1414,7 @@ class KalshiClient:
                     time.sleep(backoff)
                     continue
 
-                raise KalshiClientError(f"Kalshi API HTTP {exc.code} for {url}") from exc
+                raise KalshiClientError(f"Kalshi API HTTP {exc.code} for {url}", exc.code) from exc
             except error.URLError as exc:
                 attempts += 1
                 if attempts < max_attempts:
@@ -1519,160 +1441,3 @@ class KalshiClient:
 
         return decoded
 
-    def _post_json(
-        self,
-        path: str,
-        *,
-        authenticated: bool = False,
-        body: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        url = f"{self._base_url}{path}"
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-        }
-        if authenticated:
-            headers.update(self._require_auth_headers("POST", path))
-
-        data = json.dumps(body).encode("utf-8") if body is not None else None
-        req = request.Request(
-            url=url,
-            method="POST",
-            headers=headers,
-            data=data,
-        )
-        attempts = 0
-        max_attempts = 4
-        while True:
-            try:
-                with request.urlopen(req, timeout=self._timeout_seconds) as response:
-                    response_body = response.read().decode("utf-8")
-                break
-            except error.HTTPError as exc:
-                attempts += 1
-                retriable = exc.code in (429, 500, 502, 503, 504)
-                if retriable and attempts < max_attempts:
-                    retry_after = None
-                    try:
-                        retry_after = exc.headers.get("Retry-After")
-                    except Exception:
-                        retry_after = None
-
-                    backoff = 0.25 * (2 ** (attempts - 1)) + random.uniform(0, 0.25)
-                    if retry_after:
-                        try:
-                            backoff = max(backoff, float(retry_after))
-                        except ValueError:
-                            pass
-                    backoff = min(backoff, 5.0)
-
-                    LOGGER.warning(
-                        "Kalshi API HTTP %s for %s; retrying in %.2fs (attempt %s/%s)",
-                        exc.code,
-                        url,
-                        backoff,
-                        attempts,
-                        max_attempts,
-                    )
-                    time.sleep(backoff)
-                    continue
-
-                raise KalshiClientError(f"Kalshi API HTTP {exc.code} for {url}") from exc
-            except error.URLError as exc:
-                attempts += 1
-                if attempts < max_attempts:
-                    backoff = min(0.25 * (2 ** (attempts - 1)) + random.uniform(0, 0.25), 2.0)
-                    LOGGER.warning(
-                        "Kalshi API request failed for %s: %s; retrying in %.2fs (attempt %s/%s)",
-                        url,
-                        exc.reason,
-                        backoff,
-                        attempts,
-                        max_attempts,
-                    )
-                    time.sleep(backoff)
-                    continue
-                raise KalshiClientError(f"Kalshi API request failed for {url}: {exc.reason}") from exc
-
-        try:
-            decoded = json.loads(response_body)
-        except json.JSONDecodeError as exc:
-            raise KalshiClientError(f"Kalshi API response was not valid JSON for {url}") from exc
-
-        if not isinstance(decoded, dict):
-            raise KalshiClientError(f"Kalshi API returned a non-object payload for {url}")
-
-        return decoded
-
-    def _delete_json(self, path: str, *, authenticated: bool = False) -> dict[str, Any]:
-        url = f"{self._base_url}{path}"
-        headers = {"Accept": "application/json"}
-        if authenticated:
-            headers.update(self._require_auth_headers("DELETE", path))
-        req = request.Request(
-            url=url,
-            method="DELETE",
-            headers=headers,
-        )
-        attempts = 0
-        max_attempts = 4
-        while True:
-            try:
-                with request.urlopen(req, timeout=self._timeout_seconds) as response:
-                    response_body = response.read().decode("utf-8")
-                break
-            except error.HTTPError as exc:
-                attempts += 1
-                retriable = exc.code in (429, 500, 502, 503, 504)
-                if retriable and attempts < max_attempts:
-                    retry_after = None
-                    try:
-                        retry_after = exc.headers.get("Retry-After")
-                    except Exception:
-                        retry_after = None
-
-                    backoff = 0.25 * (2 ** (attempts - 1)) + random.uniform(0, 0.25)
-                    if retry_after:
-                        try:
-                            backoff = max(backoff, float(retry_after))
-                        except ValueError:
-                            pass
-                    backoff = min(backoff, 5.0)
-
-                    LOGGER.warning(
-                        "Kalshi API HTTP %s for %s; retrying in %.2fs (attempt %s/%s)",
-                        exc.code,
-                        url,
-                        backoff,
-                        attempts,
-                        max_attempts,
-                    )
-                    time.sleep(backoff)
-                    continue
-
-                raise KalshiClientError(f"Kalshi API HTTP {exc.code} for {url}") from exc
-            except error.URLError as exc:
-                attempts += 1
-                if attempts < max_attempts:
-                    backoff = min(0.25 * (2 ** (attempts - 1)) + random.uniform(0, 0.25), 2.0)
-                    LOGGER.warning(
-                        "Kalshi API request failed for %s: %s; retrying in %.2fs (attempt %s/%s)",
-                        url,
-                        exc.reason,
-                        backoff,
-                        attempts,
-                        max_attempts,
-                    )
-                    time.sleep(backoff)
-                    continue
-                raise KalshiClientError(f"Kalshi API request failed for {url}: {exc.reason}") from exc
-
-        try:
-            decoded = json.loads(response_body)
-        except json.JSONDecodeError as exc:
-            raise KalshiClientError(f"Kalshi API response was not valid JSON for {url}") from exc
-
-        if not isinstance(decoded, dict):
-            raise KalshiClientError(f"Kalshi API returned a non-object payload for {url}")
-
-        return decoded

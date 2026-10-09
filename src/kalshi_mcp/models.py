@@ -26,10 +26,10 @@ class Market:
     event_ticker: str
     market_type: str
     title: str
-    subtitle: str
     status: str
 
     # Optional strings
+    subtitle: str | None = None
     series_ticker: str | None = None
     yes_sub_title: str | None = None
     no_sub_title: str | None = None
@@ -199,37 +199,6 @@ class SubaccountBalancesList:
 
 
 @dataclass
-class CreatedSubaccount:
-    """Result of creating a new subaccount."""
-    subaccount_number: int
-
-
-@dataclass
-class CreateOrderParams:
-    """Parameters for creating an order via POST /portfolio/orders."""
-    ticker: str
-    side: str
-    action: str
-    client_order_id: str | None = None
-    count: int | None = None
-    count_fp: str | None = None
-    yes_price: int | None = None
-    no_price: int | None = None
-    yes_price_dollars: str | None = None
-    no_price_dollars: str | None = None
-    expiration_ts: int | None = None
-    time_in_force: str | None = None
-    buy_max_cost: int | None = None
-    sell_position_floor: int | None = None
-    post_only: bool | None = None
-    reduce_only: bool | None = None
-    self_trade_prevention_type: str | None = None
-    order_group_id: str | None = None
-    cancel_order_on_pause: bool | None = None
-    subaccount: int | None = None
-
-
-@dataclass
 class SettlementSource:
     name: str
     url: str
@@ -252,14 +221,6 @@ class Series:
     product_metadata: dict[str, object] | None = None
     volume: int | None = None
     volume_fp: str | None = None
-
-
-@dataclass
-class CancelledOrder:
-    """Result of cancelling an order via DELETE /portfolio/orders/{order_id}."""
-    order: PortfolioOrder
-    reduced_by: int
-    reduced_by_fp: str
 
 
 @dataclass

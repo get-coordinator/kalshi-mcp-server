@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
+import re
+
 from typing import Any, Callable
 
 from ..models import (
-    CancelledOrder,
-    CreateOrderParams,
-    CreatedSubaccount,
     EventPosition,
     Market,
     MarketPosition,
@@ -149,20 +148,14 @@ def build_tool_handlers(
         "get_series_tickers_for_category": lambda arguments: (
             handle_get_series_tickers_for_category(metadata_service, arguments)
         ),
-        "create_subaccount": lambda arguments: (
-            handle_create_subaccount(portfolio_service, arguments)
+        "search_markets": lambda arguments: (
+            handle_search_markets(metadata_service, arguments)
         ),
         "get_orders": lambda arguments: (
             handle_get_orders(portfolio_service, arguments)
         ),
         "get_order": lambda arguments: (
             handle_get_order(portfolio_service, arguments)
-        ),
-        "create_order": lambda arguments: (
-            handle_create_order(portfolio_service, arguments)
-        ),
-        "cancel_order": lambda arguments: (
-            handle_cancel_order(portfolio_service, arguments)
         ),
         "get_positions": lambda arguments: (
             handle_get_positions(portfolio_service, arguments)
@@ -226,20 +219,6 @@ def _serialize_subaccount_balance(item: SubaccountBalance) -> dict[str, Any]:
         "balance": item.balance,
         "updated_ts": item.updated_ts,
     }
-
-
-def handle_create_subaccount(
-    portfolio_service: PortfolioService, arguments: dict[str, Any] | None
-) -> dict[str, Any]:
-    if arguments:
-        raise ValueError("create_subaccount does not accept arguments.")
-
-    result = portfolio_service.create_subaccount()
-    return _serialize_created_subaccount(result)
-
-
-def _serialize_created_subaccount(result: CreatedSubaccount) -> dict[str, Any]:
-    return {"subaccount_number": result.subaccount_number}
 
 
 def handle_get_categories(
@@ -878,28 +857,6 @@ def handle_get_order(
     return _serialize_order(order)
 
 
-def handle_cancel_order(
-    portfolio_service: PortfolioService, arguments: dict[str, Any] | None
-) -> dict[str, Any]:
-    args = _require_arguments(arguments, "cancel_order")
-    order_id = _parse_required_str(
-        args,
-        "order_id",
-        type_error="order_id must be a string.",
-        empty_error="order_id must be a non-empty string.",
-    )
-    subaccount = _parse_optional_int(
-        args,
-        "subaccount",
-        type_error="subaccount must be an integer.",
-        range_error="subaccount must be between 0 and 32.",
-        min_value=0,
-        max_value=32,
-    )
-    result = portfolio_service.cancel_order(order_id, subaccount=subaccount)
-    return _serialize_cancelled_order(result)
-
-
 def handle_get_orders(
     portfolio_service: PortfolioService, arguments: dict[str, Any] | None
 ) -> dict[str, Any]:
@@ -990,218 +947,11 @@ def handle_get_orders(
     return _serialize_orders_list(orders_list)
 
 
-def handle_create_order(
-    portfolio_service: PortfolioService, arguments: dict[str, Any] | None
-) -> dict[str, Any]:
-    args = _require_arguments(arguments, "create_order")
-
-    ticker = _parse_required_str(
-        args,
-        "ticker",
-        type_error="ticker must be a string.",
-        empty_error="ticker must be a non-empty string.",
-    )
-
-    side = _parse_required_str(
-        args,
-        "side",
-        type_error="side must be a string.",
-        empty_error="side must be a non-empty string.",
-    )
-    allowed_side = {"yes", "no"}
-    if side not in allowed_side:
-        raise ValueError("side must be one of yes, no.")
-
-    action = _parse_required_str(
-        args,
-        "action",
-        type_error="action must be a string.",
-        empty_error="action must be a non-empty string.",
-    )
-    allowed_action = {"buy", "sell"}
-    if action not in allowed_action:
-        raise ValueError("action must be one of buy, sell.")
-
-    client_order_id = _parse_optional_str(
-        args,
-        "client_order_id",
-        type_error="client_order_id must be a string.",
-        empty_error="client_order_id must be a non-empty string.",
-    )
-
-    count = _parse_optional_int(
-        args,
-        "count",
-        type_error="count must be an integer.",
-        range_error="count must be between 1 and 1000000.",
-        min_value=1,
-        max_value=1_000_000,
-    )
-
-    count_fp = _parse_optional_str(
-        args,
-        "count_fp",
-        type_error="count_fp must be a string.",
-        empty_error="count_fp must be a non-empty string.",
-    )
-
-    yes_price = _parse_optional_int(
-        args,
-        "yes_price",
-        type_error="yes_price must be an integer.",
-        range_error="yes_price must be between 1 and 99.",
-        min_value=1,
-        max_value=99,
-    )
-
-    no_price = _parse_optional_int(
-        args,
-        "no_price",
-        type_error="no_price must be an integer.",
-        range_error="no_price must be between 1 and 99.",
-        min_value=1,
-        max_value=99,
-    )
-
-    yes_price_dollars = _parse_optional_str(
-        args,
-        "yes_price_dollars",
-        type_error="yes_price_dollars must be a string.",
-        empty_error="yes_price_dollars must be a non-empty string.",
-    )
-
-    no_price_dollars = _parse_optional_str(
-        args,
-        "no_price_dollars",
-        type_error="no_price_dollars must be a string.",
-        empty_error="no_price_dollars must be a non-empty string.",
-    )
-
-    ts_max = 10_000_000_000
-    expiration_ts = _parse_optional_int(
-        args,
-        "expiration_ts",
-        type_error="expiration_ts must be an integer.",
-        range_error="expiration_ts must be a non-negative integer.",
-        min_value=0,
-        max_value=ts_max,
-    )
-
-    time_in_force = _parse_optional_str(
-        args,
-        "time_in_force",
-        type_error="time_in_force must be a string.",
-        empty_error="time_in_force must be a non-empty string.",
-    )
-    if time_in_force is not None:
-        allowed_tif = {"fill_or_kill", "good_till_canceled", "immediate_or_cancel"}
-        if time_in_force not in allowed_tif:
-            raise ValueError(
-                "time_in_force must be one of fill_or_kill, good_till_canceled, immediate_or_cancel."
-            )
-
-    buy_max_cost = _parse_optional_int(
-        args,
-        "buy_max_cost",
-        type_error="buy_max_cost must be an integer.",
-        range_error="buy_max_cost must be a non-negative integer.",
-        min_value=0,
-        max_value=ts_max,
-    )
-
-    sell_position_floor = _parse_optional_int(
-        args,
-        "sell_position_floor",
-        type_error="sell_position_floor must be an integer.",
-        range_error="sell_position_floor is deprecated and must be 0 if provided.",
-        min_value=0,
-        max_value=0,
-    )
-
-    post_only = _parse_bool(
-        args, "post_only", False, type_error="post_only must be a boolean."
-    )
-
-    reduce_only = _parse_bool(
-        args, "reduce_only", False, type_error="reduce_only must be a boolean."
-    )
-
-    self_trade_prevention_type = _parse_optional_str(
-        args,
-        "self_trade_prevention_type",
-        type_error="self_trade_prevention_type must be a string.",
-        empty_error="self_trade_prevention_type must be a non-empty string.",
-    )
-    if self_trade_prevention_type is not None:
-        allowed_stp = {"taker_at_cross", "maker"}
-        if self_trade_prevention_type not in allowed_stp:
-            raise ValueError(
-                "self_trade_prevention_type must be one of taker_at_cross, maker."
-            )
-
-    order_group_id = _parse_optional_str(
-        args,
-        "order_group_id",
-        type_error="order_group_id must be a string.",
-        empty_error="order_group_id must be a non-empty string.",
-    )
-
-    cancel_order_on_pause = _parse_bool(
-        args,
-        "cancel_order_on_pause",
-        False,
-        type_error="cancel_order_on_pause must be a boolean.",
-    )
-
-    subaccount = _parse_optional_int(
-        args,
-        "subaccount",
-        type_error="subaccount must be an integer.",
-        range_error="subaccount must be between 0 and 32.",
-        min_value=0,
-        max_value=32,
-    )
-
-    params = CreateOrderParams(
-        ticker=ticker,
-        side=side,
-        action=action,
-        client_order_id=client_order_id,
-        count=count,
-        count_fp=count_fp,
-        yes_price=yes_price,
-        no_price=no_price,
-        yes_price_dollars=yes_price_dollars,
-        no_price_dollars=no_price_dollars,
-        expiration_ts=expiration_ts,
-        time_in_force=time_in_force,
-        buy_max_cost=buy_max_cost,
-        sell_position_floor=sell_position_floor,
-        post_only=post_only or None,
-        reduce_only=reduce_only or None,
-        self_trade_prevention_type=self_trade_prevention_type,
-        order_group_id=order_group_id,
-        cancel_order_on_pause=cancel_order_on_pause or None,
-        subaccount=subaccount,
-    )
-
-    order = portfolio_service.create_order(params)
-    return _serialize_order(order)
-
-
 def _serialize_orders_list(orders_list: PortfolioOrdersList) -> dict[str, Any]:
     serialized: dict[str, Any] = {"orders": [_serialize_order(item) for item in orders_list.orders]}
     if orders_list.cursor is not None:
         serialized["cursor"] = orders_list.cursor
     return serialized
-
-
-def _serialize_cancelled_order(result: CancelledOrder) -> dict[str, Any]:
-    return {
-        "order": _serialize_order(result.order),
-        "reduced_by": result.reduced_by,
-        "reduced_by_fp": result.reduced_by_fp,
-    }
 
 
 def _serialize_order(order: PortfolioOrder) -> dict[str, Any]:
@@ -1367,3 +1117,107 @@ def _serialize_event_position(pos: EventPosition) -> dict[str, Any]:
 def _maybe(payload: dict[str, Any], key: str, value: Any) -> None:
     if value is not None:
         payload[key] = value
+
+
+def handle_search_markets(
+    metadata_service: MetadataService, arguments: dict[str, Any] | None
+) -> dict[str, Any]:
+    args = _require_arguments(arguments, "search_markets")
+    query = _parse_required_str(
+        args,
+        "query",
+        type_error="query must be a string.",
+        empty_error="query must be a non-empty string.",
+    )
+    limit = (
+        _parse_optional_int(
+            args,
+            "limit",
+            type_error="limit must be an integer.",
+            range_error="limit must be between 1 and 20.",
+            min_value=1,
+            max_value=20,
+        )
+        or 5
+    )
+    page = min(limit * 3, 60)
+    events: list[dict[str, Any]] = []
+    seen: set[Any] = set()
+    terms = search_terms(query)
+    words = [w for w in terms.split() if len(w) >= 3][:3]
+    for q in dict.fromkeys(q for q in (terms, query, *words) if q):
+        for e in metadata_service.search_events(q, page):
+            if e.get("event_ticker") not in seen:
+                seen.add(e.get("event_ticker"))
+                events.append(e)
+    wanted = _stems(query)
+    events.sort(key=lambda e: -len(wanted & _stems(_event_text(e))))
+    return {"events": [_serialize_search_event(e) for e in events]}
+
+
+def _stems(text: str) -> set[str]:
+    out = set()
+    for w in re.findall(r"[a-z0-9]+", text.lower()):
+        if len(w) < 3 or w in _STOP:
+            continue
+        for suffix in ("ting", "ing", "es", "s"):
+            if w.endswith(suffix) and len(w) - len(suffix) >= 3:
+                w = w[: -len(suffix)]
+                break
+        out.add(w[:5])
+    return out
+
+
+_STOP = {"the", "what", "whats", "are", "will", "for", "and", "odds", "kalshi", "market", "markets", "price", "chance", "game"}
+
+
+def _event_text(event: dict[str, Any]) -> str:
+    parts = [str(event.get("event_title") or ""), str(event.get("event_subtitle") or "")]
+    parts += [str(m.get("title") or "") for m in event.get("markets") or [] if isinstance(m, dict)]
+    return " ".join(parts)
+
+
+_MONTHS = (
+    "january|february|march|april|may|june|july|august|september|october|november|december|"
+    "jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec"
+)
+_NOISE = re.compile(
+    rf"[\u2019']s\b|\b(?:(?:{_MONTHS})\b\.?|\d+(?:st|nd|rd|th)?\b|(?:vs|v|versus|odds|kalshi|market|markets|"
+    r"game|games|match|price|prices|chance|chances|the|on|for|of|at|in|and|what|whats|are|is|will|win|wins|"
+    r"today|tonight|tomorrow|week|weekend)\b\.?)",
+    re.IGNORECASE,
+)
+
+
+def search_terms(query: str) -> str:
+    """The names in a query: Kalshi's search matches words, so dates and filler push the right event down."""
+    words = re.sub(r"[^\w\s'&.-]", " ", _NOISE.sub(" ", query)).split()
+    return " ".join(w for w in words if any(c.isalnum() for c in w))
+
+
+_SEARCH_MARKETS_PER_EVENT = 10
+
+
+def _serialize_search_event(event: dict[str, Any]) -> dict[str, Any]:
+    series = event.get("series_ticker")
+    markets = [m for m in event.get("markets") or [] if isinstance(m, dict)]
+    return {
+        "event_ticker": event.get("event_ticker"),
+        "series_ticker": series,
+        "title": event.get("event_title"),
+        "subtitle": event.get("event_subtitle"),
+        "category": event.get("category"),
+        "url": f"https://kalshi.com/markets/{str(series).lower()}" if series else None,
+        "markets": [
+            {
+                "ticker": m.get("ticker"),
+                "title": m.get("title") or m.get("yes_subtitle"),
+                "yes_bid_dollars": m.get("yes_bid_dollars"),
+                "yes_ask_dollars": m.get("yes_ask_dollars"),
+                "last_price_dollars": m.get("last_price_dollars"),
+                "closes": m.get("close_ts"),
+            }
+            for m in markets[:_SEARCH_MARKETS_PER_EVENT]
+        ],
+        "more_markets": max(len(markets) - _SEARCH_MARKETS_PER_EVENT, 0),
+    }
