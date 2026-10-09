@@ -12,6 +12,7 @@ class Settings:
     timeout_seconds: float
     api_key_id: str | None = None
     api_key_path: str | None = None
+    api_key_pem: str | None = None
 
 
 def _load_dotenv_into_environment(dotenv_path: Path) -> None:

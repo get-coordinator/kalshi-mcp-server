@@ -3,6 +3,18 @@ A read-only MCP server for the Kalshi prediction market: markets, series and, wi
 
 Fork of [xilei-wang-90/kalshi-mcp-server](https://github.com/xilei-wang-90/kalshi-mcp-server) with the order and subaccount tools removed and markets without a `subtitle` kept.
 
+## Hosted over HTTP
+
+`kalshi-mcp-http` serves stateless Streamable HTTP at `POST /mcp` (and `GET /healthz`) for many users at once:
+
+- `X-Kalshi-Key: <key id>:<private key>` carries the caller's own key, as PEM or as the base64 body of the PEM. Without it, only the public market tools work.
+- Only read-only keys are accepted: a key with any `write` scope gets 403, a key Kalshi rejects gets 401. Create the key on Kalshi with Read access only.
+- `INTERNAL_API_SECRET` (required) must be sent as `X-Internal-Secret`; `KALSHI_MCP_ALLOW_NO_SECRET=true` lifts that for local use. `PORT` defaults to 8000.
+
+```bash
+docker build -t kalshi-mcp . && docker run -e INTERNAL_API_SECRET=... -p 8000:8000 kalshi-mcp
+```
+
 ## Implemented Tools
 - `get_tags_for_series_categories`
   - Calls Kalshi public endpoint: `GET /search/tags_by_categories`

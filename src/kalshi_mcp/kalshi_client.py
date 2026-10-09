@@ -37,6 +37,10 @@ LOGGER = logging.getLogger(__name__)
 class KalshiClientError(RuntimeError):
     """Raised when Kalshi API requests fail."""
 
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
+
 
 class KalshiClient:
     def __init__(self, settings: Settings) -> None:
@@ -44,6 +48,7 @@ class KalshiClient:
         self._timeout_seconds = settings.timeout_seconds
         self._api_key_id = settings.api_key_id
         self._api_key_path = settings.api_key_path
+        self._api_key_pem = settings.api_key_pem
         self._cached_private_key: Any | None = None
 
     def get_tags_for_series_categories(self) -> TagsByCategories:
@@ -67,6 +72,15 @@ class KalshiClient:
                 normalized[category] = [item for item in values if isinstance(item, str)]
 
         return TagsByCategories(tags_by_categories=normalized)
+
+    def get_api_key_scopes(self) -> list[str]:
+        """Return the scopes of the key this client signs with."""
+        payload = self._get_json("/api_keys", authenticated=True)
+        for key in payload.get("api_keys") or []:
+            if isinstance(key, dict) and key.get("api_key_id") == self._api_key_id:
+                scopes = key.get("scopes")
+                return [s for s in scopes if isinstance(s, str)] if isinstance(scopes, list) else []
+        raise KalshiClientError("Kalshi did not list this API key.")
 
     def get_balance(self) -> PortfolioBalance:
         """Return authenticated user account balance."""
@@ -1269,7 +1283,7 @@ class KalshiClient:
         return value
 
     def _require_auth_headers(self, method: str, path: str) -> dict[str, str]:
-        if not self._api_key_id or not self._api_key_path:
+        if not self._api_key_id or not (self._api_key_path or self._api_key_pem):
             raise KalshiClientError(
                 "Authenticated Kalshi endpoint requires KALSHI_API_KEY_ID and "
                 "KALSHI_API_KEY_PATH."
@@ -1306,23 +1320,30 @@ class KalshiClient:
             ) from exc
 
         if self._cached_private_key is None:
-            try:
-                with open(self._api_key_path, "rb") as key_file:
-                    key_bytes = key_file.read()
-            except OSError as exc:
-                raise KalshiClientError(
-                    f"Unable to read API key file at {self._api_key_path}: {exc}"
-                ) from exc
+            if self._api_key_pem:
+                key_bytes = self._api_key_pem.encode("utf-8")
+            else:
+                try:
+                    with open(self._api_key_path, "rb") as key_file:
+                        key_bytes = key_file.read()
+                except OSError as exc:
+                    raise KalshiClientError(
+                        f"Unable to read API key file at {self._api_key_path}: {exc}"
+                    ) from exc
 
             try:
-                self._cached_private_key = serialization.load_pem_private_key(
-                    key_bytes,
-                    password=None,
-                )
+                if key_bytes.lstrip().startswith(b"-----"):
+                    self._cached_private_key = serialization.load_pem_private_key(
+                        key_bytes,
+                        password=None,
+                    )
+                else:
+                    self._cached_private_key = serialization.load_der_private_key(
+                        base64.b64decode(key_bytes),
+                        password=None,
+                    )
             except Exception as exc:
-                raise KalshiClientError(
-                    f"Unable to load private key from {self._api_key_path}."
-                ) from exc
+                raise KalshiClientError("Unable to load the Kalshi private key.") from exc
 
         try:
             signature = self._cached_private_key.sign(
@@ -1384,7 +1405,7 @@ class KalshiClient:
                     time.sleep(backoff)
                     continue
 
-                raise KalshiClientError(f"Kalshi API HTTP {exc.code} for {url}") from exc
+                raise KalshiClientError(f"Kalshi API HTTP {exc.code} for {url}", exc.code) from exc
             except error.URLError as exc:
                 attempts += 1
                 if attempts < max_attempts:
